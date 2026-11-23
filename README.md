@@ -1,4 +1,4 @@
-# INDUSTRIAL PARK — v1.1
+# INDUSTRIAL PARK — v1.2
 
 Offline-Wirtschafts- und Aufbausimulation für Windows. Du entwickelst einen Gewerbepark selbst von einer leeren Fläche zur vermieteten, betriebenen Gewerbelandschaft.
 
@@ -7,7 +7,7 @@ Offline-Wirtschafts- und Aufbausimulation für Windows. Du entwickelst einen Gew
 1. Auf GitHub **Actions → Windows Offline EXE** öffnen.
 2. Den neuesten erfolgreichen Build auswählen.
 3. Unter **Artifacts** das Windows-Buildpaket herunterladen.
-4. ZIP entpacken und Industrial-Park-1.1.0-Windows.exe starten.
+4. ZIP entpacken und Industrial-Park-1.2.0-Windows.exe starten.
 
 Das Spiel ist ohne Installation und ohne Server spielbar. Der Build wird bei jedem Push nach main erstellt; die EXE benötigt keine Anmeldung oder Internetverbindung. Die ausführbare Datei ist nicht signiert, daher kann Windows SmartScreen eine Warnung anzeigen.
 
@@ -68,3 +68,15 @@ Mieter mit eigener Wirtschaftsentwicklung, Monatsmieten, Cashflow, Personal, tec
 **Stand:** Eine spielbare Kernversion, noch keine komplette Premium-Asset-Bibliothek oder vollständig realistische Mitarbeiter-, Bau-, Verkehrs- und Behördenmechanik.
 
 [INDUSTRIAL-PARK auf GitHub](https://github.com/Alibu06/INDUSTRIAL-PARK)
+
+## Construction Studio v1.2 – frei gestaltbare Gebäude
+
+Gebäude auf der Parkkarte mit gedrückter Maustaste zeichnen; weitere Flächen ergänzen, mit **Umschalt+Ziehen** Teilflächen abtragen und damit L-/U-Grundrisse erstellen. Anschließend über **Angebote einholen** den Bauauftrag an ein Unternehmen vergeben. Das Außenbauraster beträgt derzeit 4 m pro Feld.
+
+Im 2,5D-Inneneditor **Baukatalog** öffnen: Suche und Kategorien für Räume, Wände, Bodenbeläge, Möbel, Möbelsets, IT/Netzwerk, Sicherheit, Brandschutz, Fenster, Türen, Sanitär, Lager, Industrie und Dekoration. 90 einzelne Katalogobjekte besitzen eigene Preise und physische Maße; Objekte rasten in 25-cm-Schritten ein und berücksichtigen Kollisionsflächen. Drei vollständige Einrichtungsvorlagen ergänzen die Einzelplatzierung.
+
+Acht Türarten (u. a. Glas, Schiebetür, Brandschutz T30/T90, RC3, Sektionaltor) und sechs Fensterarten (u. a. Panoramafenster, Brandschutzglas und RC3) benötigen passende Wandsegmente. Sicherheitsobjekte umfassen Dome-, Bullet-, Turret- und PTZ-Kameras, Brandmelder, Sprinkler, Feuerlöscher, Fluchtwegbeleuchtung, Zutrittsleser, Alarmzentrale, Glasbruchmelder und Bewegungsmelder. IT-Ausstattung enthält All-in-One-Rechner, Monitore, Racks, Router, Switches, NAS, Firewall, WLAN-Access-Points und USV.
+
+Unsichtbare Raumzonen lassen sich zeichnen, über den **Zonenfilter** einblenden und im Menü **Raumprüfung** anhand grundlegender Ausstattungsregeln prüfen.
+
+**Stand der Umsetzung:** Funktionaler Ausbau des Baueditors und Datenmodells, nicht vollständiger Premium-Asset-Release. Noch fehlen aufwendig produzierte hochwertige Einzelmodelle, vollständig simulierte Kamerabilder/Alarmketten, echte Kabelverlegung und der mehrstufige, von Bauunternehmen ausgeführte Innenausbau. Bestehende Spielstände (Format v2) bleiben mit der neuen Datenstruktur kompatibel.
