@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#102835"/>
 <title>INDUSTRIAL PARK — AM Gewerbepark GmbH</title>
 <link rel="stylesheet" href="./src/style.css"/>
+<link rel="stylesheet" href="./src/v11.css"/>
 </head>
 <body>
 <div id="app">
@@ -54,12 +55,13 @@
   </div>
   <div id="mapInfo" class="map-info"></div>
   <div id="toolbar" class="toolbar"></div>
+  <div id="toolStats" class="tool-stats" aria-live="polite"></div>
   <div class="map-hint" id="mapHint">Linksklick: auswählen · Mausrad: zoomen · Leertaste + Ziehen: verschieben · Rechtsklick: Optionen</div>
   <div id="contextMenu" class="context-menu hidden"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </section>
 <aside class="panel hidden" id="panel" aria-label="Verwaltung">
-  <div class="panel-top"><div><small>AM PROPERTY MANAGEMENT</small><h2 id="panelTitle">Übersicht</h2></div><button id="closePanel" class="icon-btn" title="Schließen">×</button></div>
+  <div class="panel-top"><div><small>AM PROPERTY MANAGEMENT</small><h2 id="panelTitle">Übersicht</h2></div><button id="closePanel" class="icon-btn" title="Zurück zur Karte"></button></div>
   <div class="panel-body" id="panelBody"></div>
   <div class="panel-footer">INDUSTRIAL PARK <span>V1.0 · OFFLINE</span></div>
 </aside>
