@@ -383,21 +383,14 @@ function factory(canvas){
     }else if(S.TYPES[u.tool]&&u.dragBuild&&u.dragBuild.length){
       for(const p of u.dragBuild)diamond(p.x,p.y,u,"rgba(75,189,172,.4)","#4caeaa");
     }else if(S.TYPES[u.tool]&&u.hover){
-      const p=S.preview(s,u.tool,u.hover.x,u.hover.y,u.rotation||0);
-      const ok=p.ok,color=ok?"#54a99a":"#d67665",soft=ok?"rgba(63,180,149,.33)":"rgba(205,88,75,.32)";
-      const poly=[worldP(p.x,p.y,0,u),worldP(p.x+p.w,p.y,0,u),worldP(p.x+p.w,p.y+p.h,0,u),worldP(p.x,p.y+p.h,0,u)];
-      const z=15+S.TYPES[u.tool].levels*26;
-      const roof=[worldP(p.x,p.y,z,u),worldP(p.x+p.w,p.y,z,u),worldP(p.x+p.w,p.y+p.h,z,u),worldP(p.x,p.y+p.h,z,u)];
-      c.save();polygon(c,poly,soft,color,2.5*u.cam.zoom);
-      polygon(c,[poly[3],poly[2],roof[2],roof[3]],soft,color,1.3);
-      polygon(c,[poly[2],poly[1],roof[1],roof[2]],soft,color,1.3);
-      polygon(c,roof,ok?"rgba(156,236,218,.45)":"rgba(247,175,159,.45)",color,2.6);
-      const mid=worldP(p.x+p.w/2,p.y+p.h/2,z+13,u);
-      const label=(ok?"✓ ":"✕ ")+p.w*4+" × "+p.h*4+" m · "+(p.cost/1000).toLocaleString("de-DE")+" T€";
-      c.font="600 11px Segoe UI,Arial";const width=c.measureText(label).width+26;
-      c.fillStyle=ok?"#1d5b56":"#8c3b33";c.beginPath();c.roundRect(mid.x-width/2,mid.y-14,width,28,8);c.fill();
-      drawText(label,mid.x,mid.y,11,"#f6ffff",true);
-      c.restore();
+      const p=u.hover,owned=S.isOwned(s,p.x,p.y);
+      diamond(p.x,p.y,u,owned?"rgba(84,188,169,.33)":"rgba(224,105,79,.35)",owned?"#4aab99":"#d16a57");
+      const point=worldP(p.x+.5,p.y+.5,8,u);
+      c.save();c.font="600 11px Segoe UI,Arial";const text=owned?"Ziehen, um Grundriss zu zeichnen":"Grundstück nicht gekauft";
+      const width=c.measureText(text).width+22;
+      c.fillStyle=owned?"rgba(25,79,84,.93)":"rgba(123,63,49,.93)";
+      c.beginPath();c.roundRect(point.x-width/2,point.y-24,width,23,7);c.fill();
+      drawText(text,point.x,point.y-12,10,"#f5fffe",true);c.restore();
     }else{
       for(const p of footprints){
         const val=u.tool==="demolish"?{ok:true}:S.preview(s,u.tool,p.x,p.y);
