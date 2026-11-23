@@ -7,7 +7,7 @@ let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,dra
 const undoStack=[],redoStack=[];
 function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
 function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,cam:{cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -81,8 +81,8 @@ function updateToolStats(){
  const m=S.metrics(state),dragCells=ui.dragBuild;
  if(dragCells&&dragCells.length){
    const cost=dragCells.filter(p=>S.preview(state,ui.tool,p.x,p.y).ok).length*({road:9000,parking:4400,tree:750}[ui.tool]||0);
-   target.textContent="Bauzug · "+dragCells.length+" Felder · voraussichtlich "+euros(cost)+" · Maustaste loslassen";
- }else target.textContent=state.buildings.length+" Immobilien · "+m.jobs+" Beschäftigte · "+m.parking+" Parkplätze · "+(ui.rotation?"Gebäude 90° gedreht":"Maßstab: 1 Feld = 4 Meter");
+   target.textContent="Bauplanung · "+dragCells.length+" Felder · Basis "+euros(cost)+" · Danach Unternehmer auswählen";
+ }else target.textContent=state.buildings.length+" Immobilien · "+m.ownedArea.toLocaleString("de-DE")+" m² Eigentum · "+m.constructionProjects+" Baustellen · "+(ui.rotation?"Ausrichtung 90°":"Raster: 4 Meter");
 }
 function updateMapInfo(){
  let contents="";
@@ -94,8 +94,8 @@ function updateMapInfo(){
    const tool=worldTools.find(t=>t[0]===ui.tool);
    let cost=S.TYPES[ui.tool]?S.TYPES[ui.tool].cost:({road:9000,parking:4400,tree:750})[ui.tool];
    const p=ui.hover&&ui.tool!=="demolish"&&S.preview(state,ui.tool,ui.hover.x,ui.hover.y,ui.rotation);
-   contents='<div class="info-card"><span class="kicker">BAUMODUS AKTIV</span><b>'+esc(tool?tool[2]:"Bauen")+'</b><p>'+(S.TYPES[ui.tool]?"Grundfläche: "+(p?p.w:S.TYPES[ui.tool].w)*4+" × "+(p?p.h:S.TYPES[ui.tool].h)*4+" m · R zum Drehen":"Klicken oder Fläche mit der Maus aufziehen")+(cost?" · Kosten: "+euros(cost):"")+'</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+(p.ok?"✓ ":"⚠ ")+esc(p.message)+(p.ok&&!p.roadAccess&&S.TYPES[ui.tool]?" · Zufahrt prüfen":"")+'</div>':"")+'</div>';
-  }else contents='<div class="info-card"><span class="kicker">STANDORTÜBERSICHT</span><b>AM Gewerbepark</b><p>Wähle ein Gebäude oder beginne mit einem Bauprojekt. Alle Unternehmen arbeiten eigenständig weiter.</p></div>';
+   contents='<div class="info-card"><span class="kicker">BAUPLANUNG · BEAUFTRAGUNG</span><b>'+esc(tool?tool[2]:"Bauen")+'</b><p>'+(S.TYPES[ui.tool]?"Grundfläche: "+(p?p.w:S.TYPES[ui.tool].w)*4+" × "+(p?p.h:S.TYPES[ui.tool].h)*4+" m · R zum Drehen":"Klicken oder Fläche mit der Maus aufziehen")+(cost?" · Basispreis ab "+euros(Math.round(cost*.94)):"")+" · Nach Auswahl Angebote vergleichen"+'</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+(p.ok?"✓ ":"⚠ ")+esc(p.message)+(p.ok&&!p.roadAccess&&S.TYPES[ui.tool]?" · Zufahrt prüfen":"")+'</div>':"")+'</div>';
+  }else contents='<div class="info-card"><span class="kicker">DEIN STARTGRUNDSTÜCK</span><b>'+(state.buildings.length?"AM Gewerbepark":"Alles beginnt hier")+"</b><p>"+(state.buildings.length?"Wähle ein Gebäude oder plane die nächste Erweiterung.":"Noch keine Gebäude, Mieter oder internen Straßen. Wähle eine Straße oder einen Gebäudetyp, zeichne den Bauplan und vergleiche anschließend Angebote externer Bauunternehmen.")+'</p><button data-action="open-land">Grundstücke ansehen</button> <button data-action="open-projects">Bauaufträge</button></div>';
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
   contents='<div class="info-card"><span class="kicker">FREIER INNENAUSBAU</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Felder":"")+" · "+(ui.wallStart?"Jetzt Endpunkt setzen.":"Raum, Wand, Tür oder Ausstattung wählen.")+'</p></div>';
@@ -127,7 +127,7 @@ function propertyPanel(){
 function buildingsPanel(){
  const m=S.metrics(state);
  return '<div class="statgrid">'+stat("Gebäude",state.buildings.length)+stat("Vermietet",m.occupancy+" %")+'</div><p class="panel-note">Alle Bestandsgebäude und Bauprojekte auf deinem Grundstück. Öffne die Innenräume, um Etagen individuell zu gestalten.</p><div class="section-label">IMMOBILIENBESTAND</div>'
- +state.buildings.map(b=>{const c=company(b.tenantId);return entry(esc(b.name),esc(S.TYPES[b.type].name)+" · "+b.w*b.h*16*b.levels+" m²",statusBadge(b)+line("Mieter",c?esc(c.name):"Leerstand")+line("Miete",euros(c?c.rent:0))+'<div class="buttons">'+button("inspect-building","Öffnen",'data-id="'+b.id+'"',"primary")+button("map-building","Auf Karte",'data-id="'+b.id+'"')+'</div>');}).join("");
+ +(state.buildings.length?state.buildings.map(b=>{const c=company(b.tenantId);return entry(esc(b.name),esc(S.TYPES[b.type].name)+" · "+b.w*b.h*16*b.levels+" m²",statusBadge(b)+line("Mieter",c?esc(c.name):"Leerstand")+line("Miete",euros(c?c.rent:0))+'<div class="buttons">'+button("inspect-building","Öffnen",'data-id="'+b.id+'"',"primary")+button("map-building","Auf Karte",'data-id="'+b.id+'"')+'</div>');}).join(""):'<div class="empty-state"><h3>Noch keine Immobilien</h3><p>Dein Startgrundstück ist unbebaut. Wähle auf der Karte einen Gebäudetyp, platziere den Bauplan und beauftrage ein Bauunternehmen.</p>'+button("world-view","Erstes Gebäude planen","","primary")+'</div>');
 }
 function leasingPanel(){
  const vacant=state.buildings.filter(b=>!b.tenantId&&b.construction===0);
@@ -182,12 +182,12 @@ function transportPanel(){
  +button("traffic-layer","Verkehrsebene öffnen","","full");
 }
 function financePanel(){
- const m=S.metrics(state),estimate=m.rent-m.upkeep-m.staff-Math.round(state.debt*.004)-1700;
+ const m=S.metrics(state),land=state.parcels.filter(p=>p.owned).length*350,estimate=m.rent-m.upkeep-m.staff-Math.round(state.debt*.004)-land-900;
  return '<div class="statgrid">'+stat("Liquidität",euros(state.cash),state.cash<0?"negative":"")+stat("Darlehen",euros(state.debt))+stat("Kaltmieten / Monat",euros(m.rent))+stat("Erwarteter Saldo",euros(estimate),estimate>=0?"positive":"negative")+'</div>'
  +'<div class="section-label">MONATLICHE KALKULATION</div>'
  +entry("Immobilienbetrieb","Vereinfachte Liquiditätsbetrachtung: Kaltmieten abzgl. laufender Ausgaben.",
  line("Mieteinnahmen",euros(m.rent))+line("Immobilienunterhalt","− "+euros(m.upkeep))
- +line("Personal","− "+euros(m.staff))+line("Zinsen / sonstige Kosten","− "+euros(Math.round(state.debt*.004)+1700))
+ +line("Personal","− "+euros(m.staff))+line("Flächenkosten und Verwaltung","− "+euros(land+900))+line("Zinsen","− "+euros(Math.round(state.debt*.004)))
  +'<div class="divider"></div>'+line("Erwarteter Monatssaldo",euros(estimate)))
  +'<div class="section-label">FINANZIERUNG</div>'+entry("Investitionsdarlehen","250.000 € Auszahlung · zusätzliche Zinsen von ca. 1.000 €/Monat im vereinfachten Modell.",
  button("loan","250.000 € Kredit aufnehmen","","primary")+' '+button("repay","50.000 € tilgen"))
@@ -295,13 +295,13 @@ function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats()
 function resizeSoon(){setTimeout(()=>renderer.resize(),30);}
 function toolAction(tool){ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
 async function saveGame(silent){
- try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v1",data);if(!silent)notify("Spielstand lokal gespeichert.");}
+ try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v2",data);if(!silent)notify("Spielstand lokal gespeichert.");}
  catch(e){if(!silent)notify("Speichern fehlgeschlagen: "+e.message,true);}
 }
 async function loadGame(){
  try{
   let raw=window.IPBridge?await window.IPBridge.load():null;
-  if(!raw)raw=localStorage.getItem("industrial-park-save-v1");
+  if(!raw)raw=localStorage.getItem("industrial-park-save-v2");
   if(raw){state=S.validateLoaded(JSON.parse(raw));notify("Lokaler Spielstand geladen.");}
  }catch(e){notify("Spielstand konnte nicht geladen werden: "+e.message,true);}
  refresh();
@@ -354,11 +354,10 @@ function worldClick(e){
   selectBuilding(b);return;
  }
  const isDemolition=ui.tool==="demolish",p=isDemolition?{ok:true}:S.preview(state,ui.tool,h.x,h.y,ui.rotation);
- if(!p.ok){notify(p.message,true);return;}checkpoint();
- const res=isDemolition?S.demolish(state,h.x,h.y):S.place(state,ui.tool,h.x,h.y,ui.rotation);
- if(!res.ok)undoStack.pop();
- if(res.ok){if(res.building)ui.selectedId=res.building.id;refresh();notify(res.building?"Bauprojekt angelegt.":"Bauobjekt platziert.");}
- else notify(res.message,true);
+ if(!p.ok){notify(p.message,true);return;}
+ if(!isDemolition){openConstructionOffer(S.TYPES[ui.tool]?{tool:ui.tool,x:h.x,y:h.y,rotation:ui.rotation}:{tool:ui.tool,points:[{x:h.x,y:h.y}]});return;}
+ checkpoint();const res=S.demolish(state,h.x,h.y);if(!res.ok)undoStack.pop();
+ choice(res.ok,res.message||"Rückbau abgeschlossen.");refresh();
 }
 function menuAt(e){
  e.preventDefault();const p=getLocation(e),menu=$("contextMenu");menu.style.left=Math.min(p.x,stage.clientWidth-210)+"px";menu.style.top=Math.min(p.y,stage.clientHeight-160)+"px";
@@ -381,7 +380,7 @@ function act(name,element){
  case "rotate-build":ui.rotation=(ui.rotation+1)%2;refresh();notify("Gebäudeausrichtung: "+(ui.rotation?"90°":"0°"));break;
  case "undo":restoreHistory("undo");break;
  case "redo":restoreHistory("redo");break;
- case "world-view":setViewWorld();break;
+ case "world-view":setViewWorld();closePanel();refresh();break;
  case "focus-building":if(building(ui.selectedId)){setViewWorld();focusBuilding(building(ui.selectedId));closePanel();refresh();}break;
  case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.mode="floor";ui.tool="wall";ui.wallStart=null;closePanel();refresh();break;
  case "add-floor":checkpoint();res=S.addFloor(state,ui.selectedId);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Etage ergänzt.");refresh();break;
@@ -406,7 +405,7 @@ function act(name,element){
  case "context-floor":setViewFloor(menuTarget.buildingId);break;
  case "context-leasing":panelOpen("leasing");break;
  case "context-road":case "context-parking":case "context-office":{
-  const type=name.replace("context-","");const p=S.preview(state,type,menuTarget.x,menuTarget.y,ui.rotation);if(!p.ok){notify(p.message,true);break;}checkpoint();res=S.place(state,type,menuTarget.x,menuTarget.y,ui.rotation);choice(res.ok,res.message||"Bauobjekt platziert.");refresh();break;
+  const type=name.replace("context-","");openConstructionOffer(S.TYPES[type]?{tool:type,x:menuTarget.x,y:menuTarget.y,rotation:ui.rotation}:{tool:type,points:[{x:menuTarget.x,y:menuTarget.y}]});break;
  }
  case "floor-door":ui.tool="door";floorClick({clientX:menuTarget.x+canvas.getBoundingClientRect().left,clientY:menuTarget.y+canvas.getBoundingClientRect().top});break;
  case "floor-remove":ui.tool="erase";floorClick({clientX:menuTarget.x+canvas.getBoundingClientRect().left,clientY:menuTarget.y+canvas.getBoundingClientRect().top});break;
@@ -484,13 +483,8 @@ canvas.addEventListener("pointerup",e=>{
  if(!held||e.button!==0){ui.dragBuild=null;return;}
  if(held.mode==="build"){
    const points=ui.dragBuild||pathCells(ui.tool,held.start,held.end);
-   const valid=points.some(p=>S.preview(state,ui.tool,p.x,p.y).ok);
-   if(valid)checkpoint();
-   const res=S.placePath(state,ui.tool,points);
-   if(!res.ok&&valid)undoStack.pop();
    ui.dragBuild=null;
-   choice(res.ok,res.ok?res.count+" Felder gebaut · "+euros(res.cost)+(res.skipped?" · "+res.skipped+" übersprungen":""):res.message);
-   refresh();return;
+   openConstructionOffer({tool:ui.tool,points});refresh();return;
  }
  if(held.mode==="paint"){refresh();return;}
  if(held.mode==="click"&&!held.moved){if(ui.mode==="floor")floorClick(e);else worldClick(e);}
