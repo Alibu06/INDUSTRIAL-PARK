@@ -1,79 +1,69 @@
-# INDUSTRIAL PARK — Version 1.0 (Offline)
+# INDUSTRIAL PARK — v1.1
 
-Ein lokal ausführbarer 2D-Wirtschafts- und Aufbausimulator für die fiktive **AM Gewerbepark GmbH**. Eigentum, Bau, Vermietung, Unternehmen und Gebäudebetrieb sind in einem gemeinsamen Spielstand verknüpft.
+Offline-Wirtschafts- und Aufbausimulation für Windows. Du entwickelst einen Gewerbepark selbst von einer leeren Fläche zur vermieteten, betriebenen Gewerbelandschaft.
 
-## Windows-EXE herunterladen
+## Windows EXE
 
-1. Auf GitHub **Actions** öffnen.
-2. Workflow **Windows Offline EXE** auswählen.
-3. Den neuesten **erfolgreichen** Durchlauf öffnen.
-4. Unter **Artifacts** Industrial-Park-Windows-v1 herunterladen und ZIP entpacken.
-5. Industrial-Park-1.0.0-Windows.exe direkt starten.
+1. Auf GitHub **Actions → Windows Offline EXE** öffnen.
+2. Den neuesten erfolgreichen Build auswählen.
+3. Unter **Artifacts** das Windows-Buildpaket herunterladen.
+4. ZIP entpacken und Industrial-Park-1.1.0-Windows.exe starten.
 
-**Keine Installation und kein Server erforderlich.** GitHub Actions erstellt nach **jedem Push auf main** automatisch eine Windows-x64-EXE. Das Spiel führt keine HTTP-Anfragen aus und benötigt nach dem Download kein Internet. Keine Cloud-Anmeldung und keine Telemetrie.
+Das Spiel ist ohne Installation und ohne Server spielbar. Der Build wird bei jedem Push nach main erstellt; die EXE benötigt keine Anmeldung oder Internetverbindung. Die ausführbare Datei ist nicht signiert, daher kann Windows SmartScreen eine Warnung anzeigen.
 
-Die EXE wird auf GitHub Actions gebaut. Sie ist **nicht digital signiert**; Windows SmartScreen kann deshalb eine Warnung anzeigen. Nur selbst geprüfte Dateien aus dem eigenen Repository ausführen.
-
-## Lokal aus Quellcode starten
-
-Voraussetzung: Node.js 22 oder neuer.
+Lokal entwickeln (Node.js ab 22):
 
     npm install
     npm test
     npm start
 
-Windows-EXE selbst bauen (auf Windows):
+EXE lokal auf Windows erzeugen:
 
     npm run dist:win
 
-Der portable Build liegt unter dist/Industrial-Park-1.0.0-Windows.exe.
+Spielstände werden lokal in industrial-park-v2.json unter dem Electron-Benutzerdatenverzeichnis gespeichert. Alte v1-Speicherstände werden nicht überschrieben, die neue Karriere ist ein eigener Spielstand.
 
-## Bereits spielbare Mechaniken in v1
+## Leerer Spielstart
 
-- Isometrische Gewerbepark-Karte mit Gebäuden, Straßen, Grünflächen, Parkplätzen, Pkw und bewegten Passanten.
-- Bürogebäude, Lagerhallen, Werkstätten, Gastronomie und Betriebsgebäude platzieren: Grundstücks-/Kollisionsprüfung, Baukosten und Bauzeiten.
-- Gebäudeeditor in 2D-Draufsicht: einzelne Wände, Türen, Raumkategorien, Gegenstände und technische Anlagen.
-- Mehrere Stockwerke und aus dem Raumlayout abgeleitete Arbeitsplatzkapazität.
-- Mieter mit Beschäftigten, Umsatzbasis, Liquidität, monatlicher Geschäftsentwicklung, Wachstum und Personalabbau.
-- Mietangebote: Unternehmen benötigen passende Gebäude und können zu hohe Mieten ablehnen.
-- Monatliche Cashflow-Abrechnung: Kaltmieten, Gebäudeunterhalt, Gehälter, Zinsen, Darlehen.
-- Technische Störungen und Reinigungsaufträge: Gerätezustand, Standort, Ticket, Zuständigkeit, Personaldisposition, Materialaufwand und Reparaturdauer.
-- Personal für Technik, Reinigung und Sicherheit; manuelle oder automatische Auftragsvergabe.
-- Parkraumbedarf und optionaler Werks-Shuttle, der die Pkw-Nachfrage beeinflusst.
-- Kartenebenen für Standard, Verkehr, Leerstand und Versorgung.
-- Offline-Speicherung: automatische und manuelle Sicherung, neue Karriere.
-- Pause sowie 1x, 4x und 16x Zeitgeschwindigkeit.
+Du erhältst 790.000 € Startkapital, genau ein unbebautes Grundstück und eine öffentliche Straße am Standort. Keine Gebäude, keine Mieter, keine Parkplätze, keine internen Straßen und keine eigenen Mitarbeiter.
 
-## Bedienung
+- **Flächen:** Neue Parzellen individuell ankaufen. Bau nur auf eigenem Grundstück erlaubt.
+- **Bauaufträge:** Gebäudegrundriss oder Außenbaufläche wählen, dann Angebote mehrerer externer Bauunternehmen mit Preis, Dauer und Qualität vergleichen. Die Arbeiten werden sichtbar und erst nach Bauzeit fertiggestellt.
+- **Eigener Baubetrieb:** Später gegen einmalige Investition aufbauen, Bauarbeiter und Geräte vorhalten, laufende Löhne bezahlen und eigene Aufträge statt Fremdunternehmen durchführen. Eigene Kolonnen haben begrenzte Kapazität.
+- **Bauaufträge stornieren:** Noch offene Baustellen lassen sich gegen anteilige Rückzahlung der Kosten zurückziehen. Zeit um einen oder sieben Tage vorspulen.
 
-**Außenansicht:** Werkzeug wählen, auf Gelände klicken. Linksklick wählt Objekte; Rechtsklick zeigt Kontextaktionen. Mausrad zoomt. Leertaste + Mausziehen oder Ziehen im Auswahlwerkzeug verschiebt die Welt.
+## Innenräume: 2,5D statt nur Grundriss
 
-**Innenausbau:** Gebäude anklicken → Innenausbau. Wandwerkzeug: zweimal klicken (Anfang, Ende). Tür: Wandsegment anklicken. Raumkategorie und Gegenstände per Klick setzen. Außen führt zurück zur Karte.
+Die Innenansicht öffnet jetzt standardmäßig in **isometrischem 2,5D**. Du siehst erhöhte Wände, offene Türdurchgänge, perspektivisch platzierte Ausstattung, Außenwände als Schnittmodell und Böden. Die vorderen Außenwände werden niedriger gezeichnet, damit der Innenraum sichtbar bleibt.
 
-**Vermietung:** Mietinteressenten öffnen, freies fertiggestelltes Gebäude wählen, Kaltmiete eingeben, Angebot verschicken.
+- Mit zwei Klicks neue Wandsegmente ziehen.
+- Auf eine Wand klicken, um eine Tür zu setzen.
+- Raumtyp mit Ziehen auf mehrere Felder auftragen.
+- Ausstattung je einzelnem Raumfeld platzieren.
+- **Jedes Wandsegment einzeln gestalten:** Warmweiß, Beige, Navy, Salbei, Sichtbeton, Klinker und Glastrennwände, mit Kosten.
+- Über Ansichtsumschalter zwischen **2,5D-Innenraum** und **2D-Bauplan** wechseln. Beides sind Ansichten derselben Gebäudedaten.
+- Änderungen rückgängig mit Strg+Z, wiederholen mit Strg+Y.
 
-**Facility Management:** Im Betriebsfenster Aufträge einem verfügbaren Mitarbeiter zuweisen oder automatische Disposition aktivieren. Aufträge werden durch tatsächliche simulierte Arbeitstage abgeschlossen.
+Die Grafiken sind derzeit prozedural erzeugte 2D- und 2,5D-Darstellungen, keine fotorealistischen 3D-Objekte.
 
-**Speichern:** Strg+S oder Schaltfläche oben rechts. Spielstände liegen im anwendungsspezifischen lokalen Nutzerdatenverzeichnis als industrial-park-v1.json.
+## Verwaltung und Gameplay
 
-## Architektur
+Alle Verwaltungsmodule öffnen sich **vollflächig** statt als schmales rechtes Menü: Flächen, Bauaufträge, Objekte, Vermietung, Firmen, Betrieb, Verkehr, Finanzen und Meldungen.
 
-- src/sim.js: deterministische Simulation, unabhängige Welt- und Wirtschaftsregeln.
-- src/render.js: Canvas-Welt und Etagenansicht, prozedural gezeichnete 2D-Assets.
-- src/app.js: Interaktion, Werkzeugleiste, Verwaltung, Laden/Speichern.
-- src/style.css und index.html: Desktop-Oberfläche.
-- electron/: offline Electron-Host, isolierter Renderer, IPC, lokale JSON-Spielstände.
-- tests/: reproduzierbare Simulationsprüfungen.
-- .github/workflows/windows-exe.yml: Windows-x64-EXE wird bei jedem Push auf main getestet und erstellt.
+Auf der Karte: Mausrad zoomt, Leertaste + Ziehen verschiebt die Ansicht, R dreht Gebäude, Strg+Z macht einen Bearbeitungsschritt rückgängig. Straßen können in zusammenhängenden Zügen, Parkplätze als Flächen geplant werden. Rot/grüne Vorschau zeigt Platzierung und Kosten, externe Angebote werden erst anschließend eingeholt.
 
-## Noch nicht Bestandteil von v1
+Mieter mit eigener Wirtschaftsentwicklung, Monatsmieten, Cashflow, Personal, technische Störungen und Reparaturaufträge sind als grundlegende Simulation integriert.
 
-Die 1.0 ist eine **spielbare Kernversion**, nicht die vollständige Umsetzung sämtlicher langfristiger Wünsche aus dem Konzept. Noch nicht realisiert: tatsächliche Live-Kamerastreams, realistische dynamische Feuer-/Rauchberechnung, autonome Wegfindung für jedes Fahrzeug und jede Person, vollständige baurechtliche Prüfungen, Handelsbilanz, individuell animierte Arbeitsabläufe, vollumfängliche Polizei-/Feuerwehr-/Rettungsdienstlogik, umfassende 3D-Asset-Bibliothek, ausformulierte Mietvertragsdokumente und detaillierte Netzsimulation.
+## Projektstruktur
 
-Die prozeduralen Gebäude-, Baum- und Fahrzeugdarstellungen werden vollständig im eigenen Quellcode gezeichnet; keine unklar lizenzierten Fremdassets. Externe bezahlte Asset-Generierung wurde nicht ausgelöst.
+- src/sim.js — Simulationszustand, Grundstücke, Bauvergabe, Wirtschaft, Wandfarben.
+- src/render.js — Gewerbepark, Straßen, Gebäude, 2,5D-Schnittansicht, 2D-Bauplan.
+- src/app.js — Bedienung, Werkzeugleisten, Bauangebote, Verwaltung, lokale Spielstände.
+- src/style.css und src/v11.css — UI.
+- electron/ — Offline-Desktop-App.
+- tests/ — Simulation, Platzierung, Materialien, Projektionen und Rendering-Smoke-Tests.
+- .github/workflows/windows-exe.yml — automatische Windows-x64-EXE.
 
-## Qualität
+**Stand:** Eine spielbare Kernversion, noch keine komplette Premium-Asset-Bibliothek oder vollständig realistische Mitarbeiter-, Bau-, Verkehrs- und Behördenmechanik.
 
-npm test prüft acht zentrale miteinander verknüpfte Simulationsabläufe. Der erfolgreiche Windows-Build belegt die Erstellung der EXE, ersetzt aber noch keinen vollständigen visuellen Windows-Playtest.
-
-[GitHub-Projekt](https://github.com/Alibu06/INDUSTRIAL-PARK)
+[INDUSTRIAL-PARK auf GitHub](https://github.com/Alibu06/INDUSTRIAL-PARK)
