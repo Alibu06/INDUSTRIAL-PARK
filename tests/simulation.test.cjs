@@ -6,7 +6,7 @@ const sim=require("../src/sim.js");
 test("start setup is deterministic and has real tenants",()=>{
  const a=sim.create(),b=sim.create();
  assert.equal(a.version,1);
- assert.equal(a.buildings.length,4);
+ assert.equal(a.buildings.length,5);
  assert.equal(a.companies.length,3);
  assert.equal(a.seed,b.seed);
  assert.ok(a.roads.length>80);
