@@ -7,7 +7,7 @@ let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,dra
 const undoStack=[],redoStack=[];
 function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
 function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,floorView:"iso",cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,floorView:"iso",cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,hoverWall:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -59,16 +59,26 @@ const floorTools=[
  ["item:alarm","●","Melder"],["item:sprinkler","❋","Sprinkler"],["item:reader","⊡","Leser"],
  ["item:shelf","▥","Regal"],["item:machine","⚙","Maschine"],["item:plant","♣","Pflanze"],
  ["finish:white","⬜","Weiß"],["finish:beige","▤","Beige"],["finish:navy","▣","Navy"],
- ["finish:sage","◩","Salbei"],["finish:concrete","▥","Beton"],["finish:brick","▧","Klinker"],["finish:glass","◇","Glas"]
+ ["finish:sage","◩","Salbei"],["finish:concrete","▥","Beton"],["finish:brick","▧","Klinker"],["finish:glass","◇","Glas"],
+ ["finish:oakwall","▥","Eichenholz"],["finish:charcoal","◼","Anthrazit"],
+ ["floorfinish:carpet","▦","Teppich"],["floorfinish:oak","▤","Parkett"],["floorfinish:tile","▦","Fliesen"],
+ ["floorfinish:concrete","▨","Betonboden"],["floorfinish:vinyl","▥","Vinyl"],["floorfinish:epoxy","▣","Epoxid"]
 ];
 function updateToolbar(){
  const list=ui.mode==="floor"?floorTools:worldTools;
  let markup='<button class="toolbtn" data-action="'+(ui.mode==="floor"?"world-view":"open-buildings")+'" title="'+(ui.mode==="floor"?"Zurück zum Park":"Objektverwaltung")+'"><span class="toolicon">'+(ui.mode==="floor"?"←":"▤")+'</span><small>'+(ui.mode==="floor"?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
  const finishIndex=list.findIndex(v=>v[0].startsWith("finish:"));
- const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,finishIndex],["WÄNDE GESTALTEN",finishIndex,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
+ const floorFinishIndex=list.findIndex(v=>v[0].startsWith("floorfinish:"));
+ const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,finishIndex],["WÄNDE STREICHEN",finishIndex,floorFinishIndex],["BODENBELÄGE",floorFinishIndex,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
  for(const group of groups){
    markup+='<span class="tool-category">'+group[0]+'</span>';
-   markup+=list.slice(group[1],group[2]).map(v=>'<button title="'+esc(v[2])+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
+   markup+=list.slice(group[1],group[2]).map(v=>{
+     const wall=v[0].startsWith("finish:")?S.WALL_FINISHES[v[0].slice(7)]:null;
+     const floor=v[0].startsWith("floorfinish:")?S.FLOOR_FINISHES[v[0].slice(12)]:null;
+     const mat=wall||floor;
+     const display=mat?'<span class="finish-swatch" style="background:'+mat.color+'"></span>':'<span class="toolicon">'+v[1]+'</span>';
+     return '<button title="'+esc(v[2]+(mat?" · "+euros(mat.cost)+" / "+(wall?"Wandsegment":"m²"):""))+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'">'+display+'<small>'+v[2]+'</small></button>';
+   }).join("");
  }
  if(ui.mode==="world")markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="rotate-build" title="Gebäude drehen (R)"><span class="toolicon">⟳</span><small>Drehen</small></button>';
  else markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="floor-view-toggle" title="Innenansicht zwischen 2,5D und Bauplan umschalten"><span class="toolicon">'+(ui.floorView==="iso"?"▧":"◈")+'</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
@@ -103,7 +113,8 @@ function updateMapInfo(){
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
   const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
-  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
+  const floorFinish=ui.tool.startsWith("floorfinish:")?S.FLOOR_FINISHES[ui.tool.slice(12)]:null;
+  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
  }
  $("mapInfo").innerHTML=contents;
 }
@@ -355,7 +366,8 @@ function floorClick(e){
   if(!edge||!f.walls[edge]){notify("Bitte eine vorhandene Wand anklicken.",true);return;}
   checkpoint();const res=S.finishWall(state,b.id,ui.floorIndex,edge,ui.tool.slice(7));
   if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Wandoberfläche geändert · "+euros(res.cost));
- }else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
+ }else if(ui.tool.startsWith("floorfinish:")){if(!h.inside)return;checkpoint();const res=S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12));if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Bodenbelag verlegt · "+euros(res.cost));}
+ else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
  else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
  refresh();
 }
@@ -464,10 +476,11 @@ canvas.addEventListener("pointerdown",e=>{
    const h=renderer.hitWorld(p.x,p.y,ui);
    drag={mode:"build",start:h,end:h,x:e.clientX,y:e.clientY,moved:false};
    ui.dragBuild=pathCells(ui.tool,h,h);updateToolStats();
- }else if(ui.mode==="floor"&&ui.tool.startsWith("room:")){
-   drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false};
+ }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("floorfinish:"))){
+   drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false,changed:0,lastError:""};
+   checkpoint();
    const b=building(ui.selectedId),h=b&&renderer.hitFloor(p.x,p.y,ui,b);
-   if(h&&h.inside){checkpoint();S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));drag.seen.add(h.x+","+h.y);}
+   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
  }else{
    drag={mode:"click",x:e.clientX,y:e.clientY,moved:false};
  }
@@ -476,8 +489,8 @@ canvas.addEventListener("pointerdown",e=>{
 });
 canvas.addEventListener("pointermove",e=>{
  const p=getLocation(e),last=ui.hover,oldFloor=ui.hoverFloor;
- if(ui.mode==="floor"&&building(ui.selectedId))ui.hoverFloor=renderer.hitFloor(p.x,p.y,ui,building(ui.selectedId));
- else ui.hover=renderer.hitWorld(p.x,p.y,ui);
+ if(ui.mode==="floor"&&building(ui.selectedId)){ui.hoverFloor=renderer.hitFloor(p.x,p.y,ui,building(ui.selectedId));ui.hoverWall=renderer.pickFloorWall(p.x,p.y,ui,building(ui.selectedId));}
+ else{ui.hover=renderer.hitWorld(p.x,p.y,ui);ui.hoverWall=null;}
  if(drag){
    if(drag.mode==="pan"){
      const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
@@ -495,7 +508,8 @@ canvas.addEventListener("pointermove",e=>{
    }else if(drag.mode==="paint"){
      const h=ui.hoverFloor,b=building(ui.selectedId);
      if(h&&h.inside&&b&&!drag.seen.has(h.x+","+h.y)){
-       S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
+       const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
+       if(res.ok)drag.changed++;else drag.lastError=res.message;
        drag.seen.add(h.x+","+h.y);drag.moved=true;
      }
    }else if(drag.mode==="click"&&ui.mode==="world"&&ui.tool==="select"){
@@ -517,11 +531,11 @@ canvas.addEventListener("pointerup",e=>{
    ui.dragBuild=null;
    openConstructionOffer({tool:ui.tool,points});refresh();return;
  }
- if(held.mode==="paint"){refresh();return;}
+ if(held.mode==="paint"){if(held.changed===0&&undoStack.length)undoStack.pop();refresh();notify(held.changed?held.changed+" Boden-/Raumfelder bearbeitet.":held.lastError||"Keine Felder geändert.",!held.changed);return;}
  if(held.mode==="click"&&!held.moved){if(ui.mode==="floor")floorClick(e);else worldClick(e);}
 });
 canvas.addEventListener("pointercancel",()=>{drag=null;pressed=false;ui.dragBuild=null;refresh();});
-canvas.addEventListener("pointerleave",()=>{if(!drag){ui.hover=null;ui.hoverFloor=null;updateMapInfo();}});
+canvas.addEventListener("pointerleave",()=>{if(!drag){ui.hover=null;ui.hoverFloor=null;ui.hoverWall=null;updateMapInfo();}});
 canvas.addEventListener("wheel",e=>{
  e.preventDefault();if(ui.mode==="floor")ui.cam.floorZoom=Math.max(.65,Math.min(2,ui.cam.floorZoom*(e.deltaY>0?.88:1.13)));
  else ui.cam.zoom=Math.max(.43,Math.min(2.4,ui.cam.zoom*(e.deltaY>0?.88:1.13)));
