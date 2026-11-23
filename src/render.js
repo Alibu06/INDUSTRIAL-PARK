@@ -33,7 +33,7 @@ function factory(canvas){
      const dx=(mx-g.x)/g.size-g.rows,dy=(my-g.y)/(g.size*.5);
      fx=(dx+dy)/2;fy=(dy-dx)/2;
    }else{fx=(mx-g.x)/g.size;fy=(my-g.y)/g.size;}
-   return {x:Math.floor(fx),y:Math.floor(fy),nx:Math.round(fx),ny:Math.round(fy),fx,fy,inside:fx>=0&&fy>=0&&fx<f.cols&&fy<f.rows,g};
+   return {x:Math.floor(fx),y:Math.floor(fy),nx:Math.round(fx),ny:Math.round(fy),fx,fy,inside:fx>=0&&fy>=0&&fx<f.cols&&fy<f.rows&&S.validCell(f,fx,fy),g};
  }
  function drawText(text,x,y,size,color,bold,align){
   c.save();c.font=(bold?"600 ":"")+" "+size+"px Inter,Segoe UI,Arial,sans-serif";c.fillStyle=color;c.textAlign=align||"center";c.textBaseline="middle";c.fillText(text,x,y);c.restore();
@@ -94,6 +94,39 @@ function factory(canvas){
  function paintBuilding(b,s,u){
   const construction=b.construction>0,hover=u.hover&&u.hover.x>=b.x&&u.hover.x<b.x+b.w&&u.hover.y>=b.y&&u.hover.y<b.y+b.h;
   const selected=u.selectedId===b.id;
+  if(b.shape&&b.shape.length){
+    const z=u.cam.zoom,h=20+b.floors.length*30,occupied=new Set(b.shape.map(([x,y])=>x+","+y));
+    const colors={office:["#adc3cd","#879fae","#d9e6e8"],warehouse:["#abbaba","#88979a","#d7dddb"],workshop:["#c5af9c","#a48f81","#e3d5c5"],cafe:["#b8b9a0","#a5a68c","#e6ddc6"],service:["#a3bdc8","#819da9","#dde9e9"]}[b.type];
+    c.save();
+    for(const [xx,yy] of b.shape.slice().sort((a,b)=>a[0]+a[1]-b[0]-b[1])){
+      const x=b.x+xx,y=b.y+yy;
+      const p=worldP(x,y,0,u),q=worldP(x+1,y,0,u),r=worldP(x+1,y+1,0,u),t=worldP(x,y+1,0,u);
+      const pt=worldP(x,y,h,u),qt=worldP(x+1,y,h,u),rt=worldP(x+1,y+1,h,u),tt=worldP(x,y+1,h,u);
+      if(!occupied.has(xx+","+(yy+1))){
+        polygon(c,[t,r,rt,tt],colors[0],"rgba(37,61,72,.25)",.7);
+        for(let n=0;n<b.floors.length;n++){
+          const a=mix(t,tt,(n+.45)/b.floors.length),bb=mix(r,rt,(n+.45)/b.floors.length);
+          polygon(c,[mix(a,bb,.22),mix(a,bb,.78),{...mix(a,bb,.78),y:mix(a,bb,.78).y-8*z},{...mix(a,bb,.22),y:mix(a,bb,.22).y-8*z}],"#527387","#d9e9e8",.7*z);
+        }
+      }
+      if(!occupied.has((xx+1)+","+yy)){
+        polygon(c,[q,r,rt,qt],colors[1],"rgba(36,57,68,.23)",.7);
+        for(let n=0;n<b.floors.length;n++){
+          const a=mix(q,qt,(n+.45)/b.floors.length),bb=mix(r,rt,(n+.45)/b.floors.length);
+          polygon(c,[mix(a,bb,.25),mix(a,bb,.75),{...mix(a,bb,.75),y:mix(a,bb,.75).y-7*z},{...mix(a,bb,.25),y:mix(a,bb,.25).y-7*z}],"#4c7186","#e2eeee",.7*z);
+        }
+      }
+      polygon(c,[pt,qt,rt,tt],b.construction?"#b4a688":colors[2],selected?"#e6b068":hover?"#a4d8df":"#77949c",selected?2*z:.8);
+      if(!b.construction&&b.type==="office"&&(xx+yy)%2===0){
+        polygon(c,[worldP(x+.12,y+.18,h+.35,u),worldP(x+.76,y+.18,h+.35,u),worldP(x+.76,y+.75,h+.35,u),worldP(x+.12,y+.75,h+.35,u)],"#547889","#bfdae2",.6*z);
+      }
+    }
+    if(b.construction||selected||hover||z>1.25){
+      const p=worldP(b.x+b.w/2,b.y+b.h/2,h+20,u);
+      drawText(b.construction?"BAU · "+b.construction+" Tage":b.name,p.x,p.y,11*z,"#2d5463",true);
+    }
+    c.restore();return;
+  }
   const h=(20+b.floors.length*30);
   const a=worldP(b.x,b.y,0,u),e=worldP(b.x+b.w,b.y,0,u),d=worldP(b.x+b.w,b.y+b.h,0,u),f=worldP(b.x,b.y+b.h,0,u);
   const at=worldP(b.x,b.y,h,u),et=worldP(b.x+b.w,b.y,h,u),dt=worldP(b.x+b.w,b.y+b.h,h,u),ft=worldP(b.x,b.y+b.h,h,u);
@@ -538,6 +571,7 @@ function factory(canvas){
    c.save();c.shadowColor="rgba(23,50,60,.19)";c.shadowBlur=30;c.shadowOffsetY=12;
    c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);c.restore();
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
+     if(!S.validCell(f,x,y))continue;
      const type=f.tiles[S.key(x,y)]||"office";
      const surf=floorSurface(f,x,y,type);
     c.fillStyle=surf.color;c.fillRect(g.x+x*z,g.y+y*z,z,z);
@@ -641,6 +675,7 @@ function factory(canvas){
    polygon(c,[bb,d,down(d),down(bb)],"#8f9fa7","#8699a4",1);
    polygon(c,[a,bb,d,e],"#d7d9d6","#708a96",1.3);
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
+     if(!S.validCell(f,x,y))continue;
      const type=f.tiles[S.key(x,y)]||"office";
      const pts=[floorPoint(g,x,y),floorPoint(g,x+1,y),floorPoint(g,x+1,y+1),floorPoint(g,x,y+1)];
      const surface=floorSurface(f,x,y,type);
