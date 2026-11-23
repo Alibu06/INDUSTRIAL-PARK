@@ -3,7 +3,7 @@
   else root.IPSim = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  const VERSION = 1;
+  const VERSION = 2;
   const TYPES = {
     office:{name:"Bürogebäude",w:5,h:4,cost:320000,days:10,levels:2,color:"#9db2c4",monthly:1500,unit:"Büro"},
     warehouse:{name:"Logistikhalle",w:6,h:5,cost:390000,days:13,levels:1,color:"#9ba7a7",monthly:2400,unit:"Lager"},
@@ -65,37 +65,130 @@
     building.floors[floor||0].items.push({id:d.id,type,x,y,deviceId:d.id});
     return d;
   }
+  const PARCELS=[
+    {id:"P-01",name:"Startgrundstück",x:4,y:10,w:20,h:16,price:0,owned:true},
+    {id:"P-02",name:"Ost-Erweiterung",x:24,y:10,w:20,h:16,price:168000,owned:false},
+    {id:"P-03",name:"Südwest-Areal",x:4,y:26,w:20,h:12,price:112000,owned:false},
+    {id:"P-04",name:"Südost-Areal",x:24,y:26,w:20,h:12,price:128000,owned:false},
+    {id:"P-05",name:"Nordwest-Flächen",x:4,y:1,w:20,h:7,price:96000,owned:false},
+    {id:"P-06",name:"Nordost-Flächen",x:24,y:1,w:20,h:7,price:115000,owned:false}
+  ];
+  const CONTRACTORS=[
+    {id:"rheinbau",name:"Rheinbau Projektbau",description:"Solider regionaler Generalunternehmer",factor:1.08,speed:1,quality:83},
+    {id:"direktbau",name:"Direktbau Niederrhein",description:"Günstiger, benötigt mehr Zeit",factor:.94,speed:1.45,quality:72},
+    {id:"rheinlandplus",name:"Rheinland Projekt & Bau",description:"Schnellere Ausführung und höhere Qualität",factor:1.23,speed:.76,quality:94}
+  ];
   function create(){
-    const s={version:VERSION,serial:0,seed:931177,clock:"2027-05-03T07:30:00.000Z",cash:1240000,debt:480000,monthlyNet:0,companyIncome:0,expenses:0,mode:"career",world:{w:48,h:40},roads:[],parking:[],trees:[],utilities:[],buildings:[],companies:[],applicants:clone(APPLICANTS),devices:[],tickets:[],messages:[],history:[],stats:{visitors:0,carDemand:0,powerDemand:0},bus:false,staff:{technicians:2,cleaners:3,security:1},autodispatch:false};
-    const rs=new Set();for(let x=2;x<=44;x++){rs.add(key(x,8));rs.add(key(x,9));}
-    for(let y=8;y<=36;y++){rs.add(key(8,y));rs.add(key(9,y));rs.add(key(38,y));rs.add(key(39,y));}
-    for(let x=8;x<=39;x++){rs.add(key(x,29));rs.add(key(x,30));}
-    for(let x=9;x<=39;x++){rs.add(key(x,19));rs.add(key(x,20));}
-    s.roads=Array.from(rs);
-    for(let x=12;x<20;x++)for(let y=18;y<=18;y++)s.parking.push(key(x,y));
-    for(let x=24;x<33;x++)s.parking.push(key(x,18));
-    for(let x=11;x<21;x++)s.parking.push(key(x,28));
-    for(let i=0;i<185;i++){const x=1+Math.floor(rand(s)*46),y=1+Math.floor(rand(s)*38);if(!rs.has(key(x,y))&&rand(s)>.2)s.trees.push(key(x,y));}
-    const b1=makeBuilding(s,"office",15,11,true);b1.name="Bürohaus Nord";
-    const b2=makeBuilding(s,"warehouse",28,22,true);b2.name="Logistikzentrum West";
-    const b3=makeBuilding(s,"cafe",12,22,true);b3.name="Parkcafé";
-    const b4=makeBuilding(s,"service",24,12,true);b4.name="AM Betriebszentrale";
-    const b5=makeBuilding(s,"workshop",3,22,true);b5.name="Handwerkerhof Süd";
-    makeCompany(s,{name:"Novatec Software GmbH",industry:"IT & Software",kind:"office",employees:35,turnover:220000,health:83},b1,6200);
-    makeCompany(s,{name:"WestCargo Logistik GmbH",industry:"Logistik",kind:"warehouse",employees:42,turnover:390000,health:78},b2,8900);
-    makeCompany(s,{name:"Kantinenbetrieb Berg & Sohn",industry:"Gastronomie",kind:"cafe",employees:11,turnover:69000,health:71},b3,2900);
-    device(s,b1,"hvac",9,2);const printer=device(s,b1,"printer",4,5);device(s,b1,"light",11,8);
-    device(s,b1,"alarm",15,2);device(s,b2,"camera",3,3);device(s,b2,"machine",11,12);
-    const dispenser=device(s,b3,"dispenser",4,5);device(s,b4,"reader",2,2);
-    printer.condition=11;ticketFor(s,printer);dispenser.condition=9;ticketFor(s,dispenser);
-    s.utilities=[{id:id(s,"UT"),x:6,y:7,type:"power",capacity:480},{id:id(s,"UT"),x:40,y:22,type:"fibre",capacity:1000},{id:id(s,"UT"),x:40,y:32,type:"water",capacity:1000}];
-    s.trees=s.trees.filter(p=>{const [x,y]=p.split(",").map(Number);return !s.buildings.some(b=>x>=b.x-1&&y>=b.y-1&&x<b.x+b.w+1&&y<b.y+b.h+1)&&!s.parking.includes(p);});
-    addMessage(s,"Willkommen im Gewerbepark","Ein leerstehender Handwerkerhof wartet auf neue Mieter. Die Betriebszentrale betreibst du selbst.");
-    addMessage(s,"Die ersten Mietinteressenten sind da","Öffne »Vermietung«, um Unternehmen anzusiedeln.");
+    const s={version:VERSION,serial:0,seed:931177,clock:"2027-05-03T07:30:00.000Z",
+      cash:790000,debt:0,monthlyNet:0,companyIncome:0,expenses:0,mode:"career",
+      world:{w:48,h:40},roads:[],publicRoads:[],parking:[],trees:[],utilities:[],
+      parcels:clone(PARCELS),projects:[],constructionDept:{active:false,workers:0,equipment:0},
+      buildings:[],companies:[],applicants:clone(APPLICANTS),devices:[],tickets:[],messages:[],history:[],
+      stats:{visitors:0,carDemand:0,powerDemand:0},bus:false,
+      staff:{technicians:0,cleaners:0,security:0},autodispatch:false};
+    for(let x=1;x<47;x++){s.publicRoads.push(key(x,8));s.publicRoads.push(key(x,9));}
+    // Landscape outside the player's initial lot; its surface starts genuinely empty.
+    for(let i=0;i<135;i++){
+      const x=1+Math.floor(rand(s)*46),y=1+Math.floor(rand(s)*38);
+      if(!isOwned(s,x,y)&&!s.publicRoads.includes(key(x,y))&&rand(s)>.30)s.trees.push(key(x,y));
+    }
+    addMessage(s,"Dein Gewerbepark beginnt auf der grünen Wiese",
+      "Du besitzt nur das leere Startgrundstück. Baue die erste Zufahrt, beauftrage eine Baufirma und errichte deine erste vermietbare Fläche.");
+    addMessage(s,"Bauunternehmen stehen bereit",
+      "Beim Platzieren erhältst du Angebote mehrerer Fachunternehmen. Einen eigenen Baubetrieb kannst du später gründen.");
     return s;
   }
+  function isOwned(s,x,y){
+    return !!s.parcels&&s.parcels.some(p=>p.owned&&x>=p.x&&y>=p.y&&x<p.x+p.w&&y<p.y+p.h);
+  }
+  function buyParcel(s,parcelId){
+    const p=s.parcels.find(q=>q.id===parcelId);
+    if(!p)return {ok:false,message:"Grundstück nicht vorhanden"};
+    if(p.owned)return {ok:false,message:"Dieses Grundstück gehört dir bereits"};
+    if(s.cash<p.price)return {ok:false,message:"Für diesen Grundstücksankauf fehlt Kapital"};
+    s.cash-=p.price;p.owned=true;
+    addMessage(s,"Flächenankauf abgeschlossen",p.name+" · "+(p.w*p.h*16).toLocaleString("de-DE")+" m² · "+p.price.toLocaleString("de-DE")+" €");
+    return {ok:true,parcel:p};
+  }
+  function propertyArea(s){return s.parcels.filter(p=>p.owned).reduce((n,p)=>n+p.w*p.h*16,0);}
+  function startConstructionDept(s){
+    if(s.constructionDept.active)return {ok:false,message:"Eigener Baubetrieb bereits gegründet"};
+    const cost=255000;
+    if(s.cash<cost)return {ok:false,message:"Für den Aufbau benötigst du 255.000 € Startkapital"};
+    s.cash-=cost;s.constructionDept={active:true,workers:5,equipment:2};
+    addMessage(s,"Eigene Bauabteilung eröffnet",
+      "Fünf Bauarbeiter, zwei Geräteeinheiten und ein Betriebshof wurden finanziert. Eigene Bauleistungen sind jetzt verfügbar.");
+    return {ok:true,cost};
+  }
+  function setBuilders(s,delta){
+    if(!s.constructionDept.active)return {ok:false,message:"Zuerst eine eigene Bauabteilung gründen"};
+    const count=s.constructionDept.workers+delta;
+    if(count<0||count>35)return {ok:false,message:"Personalgrenze erreicht"};
+    if(count<5&&s.projects.some(p=>p.status==="bau"&&p.contractorId==="eigen"))return {ok:false,message:"Laufende Bauaufträge benötigen mindestens fünf Bauarbeiter"};
+    s.constructionDept.workers=count;return {ok:true};
+  }
+  function getQuotes(s,tool,quantity=1){
+    const count=Math.max(1,Math.floor(quantity));
+    const base=(TYPES[tool]?TYPES[tool].cost:(SITE_COSTS[tool]||0)*count);
+    if(!base)return [];
+    const baseDays=TYPES[tool]?TYPES[tool].days:Math.max(1,Math.ceil(count/5));
+    const external=CONTRACTORS.map(c=>({...c,price:Math.round(base*c.factor),days:Math.max(1,Math.ceil(baseDays*c.speed)),own:false,available:true}));
+    const own=s.constructionDept.active?[{
+      id:"eigen",name:"Eigener Baubetrieb",description:"Eigenes Personal, Maschinen und Betriebshof",
+      factor:.81,price:Math.round(base*.81),days:Math.max(1,Math.ceil(baseDays*1.1)),
+      quality:80,own:true,available:s.constructionDept.workers>=5&&s.projects.filter(p=>p.status==="bau"&&p.contractorId==="eigen").length<1
+    }]:[];
+    return external.concat(own);
+  }
+  function commission(s,plan,contractorId){
+    if(!plan||!plan.tool)return {ok:false,message:"Kein Bauplan ausgewählt"};
+    const tool=plan.tool,isBuilding=!!TYPES[tool],points=[];
+    let check;
+    if(isBuilding){
+      check=preview(s,tool,plan.x,plan.y,plan.rotation||0);
+      if(!check.ok)return {ok:false,message:check.message};
+    }else{
+      if(!(tool in SITE_COSTS))return {ok:false,message:"Unbekannter Baubereich"};
+      const seen=new Set();
+      for(const p of plan.points||[]){
+        const k=key(Math.floor(p.x),Math.floor(p.y));
+        if(!seen.has(k)){seen.add(k);points.push({x:Math.floor(p.x),y:Math.floor(p.y)});}
+      }
+      if(!points.length)return {ok:false,message:"Keine Fläche ausgewählt"};
+      for(const p of points){
+        check=preview(s,tool,p.x,p.y);
+        if(!check.ok)return {ok:false,message:"Bauzug nicht möglich bei "+p.x+"/"+p.y+": "+check.message};
+      }
+    }
+    const q=getQuotes(s,tool,isBuilding?1:points.length).find(x=>x.id===contractorId);
+    if(!q)return {ok:false,message:"Bitte einen vorhandenen Bauunternehmer auswählen"};
+    if(!q.available)return {ok:false,message:"Eigene Baukolonne derzeit nicht verfügbar"};
+    if(s.cash<q.price)return {ok:false,message:"Finanzierung reicht für dieses Angebot nicht aus"};
+    s.cash-=q.price;
+    let building=null;
+    if(isBuilding){
+      building=makeBuilding(s,tool,check.x,check.y,false,plan.rotation||0);
+      building.construction=q.days;
+      building.condition=q.quality;
+      building.contractorId=q.id;
+      s.trees=s.trees.filter(k=>{const [x,y]=k.split(",").map(Number);return !(x>=building.x&&x<building.x+building.w&&y>=building.y&&y<building.y+building.h);});
+    }
+    const project={
+      id:id(s,"BAU"),tool,buildingId:building?building.id:null,
+      points:isBuilding?[]:points,contractorId:q.id,contractorName:q.name,
+      quote:q.price,remaining:q.days,totalDays:q.days,quality:q.quality,status:"bau",
+      created:s.clock.slice(0,10),completed:null
+    };
+    s.projects.push(project);
+    addMessage(s,"Bauauftrag vergeben",
+      q.name+" übernimmt "+(building?building.name:points.length+" Felder "+tool)+". Festpreis "+q.price.toLocaleString("de-DE")+" €, Bauzeit "+q.days+" Tage.");
+    return {ok:true,project,building,cost:q.price};
+  }
   function overlap(s,x,y,w,h){
-    if(x<1||y<1||x+w>=s.world.w||y+h>=s.world.h)return "Außerhalb der Grundstücksgrenze";
+    if(x<1||y<1||x+w>s.world.w-1||y+h>s.world.h-1)return "Außerhalb der Spielwelt";
+    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(!isOwned(s,xx,yy))return "Grundstück nicht im Eigentum – zuerst Fläche ankaufen";
+    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.publicRoads.includes(key(xx,yy)))return "Öffentliche Straße kann nicht überbaut werden";
+    if(s.projects.some(p=>p.status==="bau"&&p.points.some(a=>a.x>=x&&a.x<x+w&&a.y>=y&&a.y<y+h)))return "Fläche bereits für Bauarbeiten reserviert";
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.roads.includes(key(xx,yy)))return "Straße liegt im Baufeld";
     if(s.buildings.some(b=>x<b.x+b.w&&x+w>b.x&&y<b.y+b.h&&y+h>b.y))return "Gebäude steht im Baufeld";
     return "";
@@ -107,23 +200,26 @@
       const t=TYPES[tool],swap=Math.abs(rotation)%2===1,w=swap?t.h:t.w,h=swap?t.w:t.h;
       const error=overlap(s,x,y,w,h);
       const parkingCollision=s.parking.some(p=>{const [px,py]=p.split(",").map(Number);return px>=x&&px<x+w&&py>=y&&py<y+h;});
-      const valid=!error&&!parkingCollision&&s.cash>=t.cost;
+      const valid=!error&&!parkingCollision&&s.cash>=Math.round(t.cost*.94);
       let nearby=false;
       for(let yy=y-2;yy<y+h+2;yy++)for(let xx=x-2;xx<x+w+2;xx++){
-        if(xx>=0&&yy>=0&&xx<s.world.w&&yy<s.world.h&&s.roads.includes(key(xx,yy)))nearby=true;
+        if(xx>=0&&yy>=0&&xx<s.world.w&&yy<s.world.h&&(s.roads.includes(key(xx,yy))||s.publicRoads.includes(key(xx,yy))))nearby=true;
       }
       return {ok:valid,x,y,w,h,cost:t.cost,roadAccess:nearby,
-        message:error|| (parkingCollision?"Vorhandene Parkplätze zuerst entfernen":s.cash<t.cost?"Zu wenig Kapital":"Baufläche frei")};
+        message:error|| (parkingCollision?"Vorhandene Parkplätze zuerst entfernen":s.cash<Math.round(t.cost*.94)?"Zu wenig Kapital":"Baufläche frei")};
     }
     if(!(tool in SITE_COSTS))return {ok:false,x,y,w:1,h:1,cost:0,message:"Unbekanntes Bauwerkzeug"};
     if(x<0||y<0||x>=s.world.w||y>=s.world.h)return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Außerhalb der Karte"};
+    if(!isOwned(s,x,y))return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Grundstück erst kaufen"};
+    if(s.publicRoads.includes(key(x,y)))return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Öffentliche Straße"};
+    if(s.projects.some(p=>p.status==="bau"&&p.points.some(a=>a.x===x&&a.y===y)))return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Fläche bereits für Bauarbeiten reserviert"};
     if(s.buildings.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h))return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Hier steht ein Gebäude"};
     const k=key(x,y),road=s.roads.includes(k),park=s.parking.includes(k),tree=s.trees.includes(k);
     const err=tool==="road"?(road?"Straße bereits vorhanden":park?"Parkplatz muss zuerst entfernt werden":""):
       tool==="parking"?(road||park?"Bereits befestigte Fläche":""):
       (road||park||tree?"Fläche ist bereits belegt":"");
     return {ok:!err&&s.cash>=SITE_COSTS[tool],x,y,w:1,h:1,cost:SITE_COSTS[tool],
-      message:err|| (s.cash<SITE_COSTS[tool]?"Zu wenig Kapital":"Baufeld frei")};
+      message:err|| (s.cash<Math.round(SITE_COSTS[tool]*.94)?"Zu wenig Kapital":"Baufeld frei")};
   }
   function place(s,tool,x,y,rotation=0){
     const p=preview(s,tool,x,y,rotation);
@@ -228,9 +324,9 @@
     const demand=Math.ceil(jobs*(s.bus?.38:.62));
     const rent=s.companies.reduce((n,c)=>n+c.rent,0);
     const upkeep=s.buildings.reduce((n,b)=>n+TYPES[b.type].monthly,0);
-    const staff=s.staff.technicians*3500+s.staff.cleaners*2600+s.staff.security*3150;
+    const staff=s.staff.technicians*3500+s.staff.cleaners*2600+s.staff.security*3150+(s.constructionDept.active?s.constructionDept.workers*3350+2800:0);
     const power=s.buildings.reduce((n,b)=>n+(b.type==="warehouse"?75:b.type==="office"?35:19),0);
-    return {jobs,demand,parking:parkingCount(s),rent,upkeep,staff,power,occupancy:s.buildings.filter(b=>b.type!=="service").length?Math.round(100*s.buildings.filter(b=>b.tenantId&&b.type!=="service").length/s.buildings.filter(b=>b.type!=="service").length):0,companies:s.companies.length};
+    return {jobs,demand,parking:parkingCount(s),rent,upkeep,staff,power,ownedArea:propertyArea(s),constructionProjects:s.projects.filter(p=>p.status==="bau").length,occupancy:s.buildings.filter(b=>b.type!=="service").length?Math.round(100*s.buildings.filter(b=>b.tenantId&&b.type!=="service").length/s.buildings.filter(b=>b.type!=="service").length):0,companies:s.companies.length};
   }
   function dispatch(s,ticketId){
     const t=s.tickets.find(x=>x.id===ticketId);if(!t||t.status!=="offen")return {ok:false,message:"Auftrag nicht offen"};
@@ -252,8 +348,28 @@
     addMessage(s,"Neue Störungsmeldung",t.description+" · "+(b?b.name:"Gebäude"),"warning");
   }
   function daily(s){
+    for(const p of s.projects.filter(x=>x.status==="bau")){
+      p.remaining--;
+      const b=p.buildingId&&s.buildings.find(x=>x.id===p.buildingId);
+      if(b)b.construction=Math.max(0,p.remaining);
+      if(p.remaining<=0){
+        p.status="fertig";p.completed=s.clock.slice(0,10);
+        if(!b){
+          const target=p.tool==="road"?"roads":p.tool==="parking"?"parking":"trees";
+          for(const q of p.points){
+            const k=key(q.x,q.y);
+            if(!s[target].includes(k))s[target].push(k);
+            if(target!=="trees")s.trees=s.trees.filter(v=>v!==k);
+          }
+        }
+        addMessage(s,"Bauabnahme abgeschlossen",p.contractorName+" hat "+(b?b.name:p.points.length+" Außenanlagen-Felder")+" fertiggestellt.");
+      }
+    }
     for(const b of s.buildings){
-      if(b.construction>0){b.construction--;if(b.construction===0)addMessage(s,"Bau abgeschlossen",b.name+" kann jetzt vermietet oder eingerichtet werden.");}
+      if(b.construction>0&&!s.projects.some(p=>p.buildingId===b.id&&p.status==="bau")){
+        b.construction--;
+        if(b.construction===0)addMessage(s,"Bau abgeschlossen",b.name+" ist bezugsfertig.");
+      }
       b.condition=Math.max(15,b.condition-.009);
     }
     for(const d of s.devices){
@@ -291,7 +407,8 @@
       else{tenantRent+=c.rent;positive++;}
     }
     s.companies=s.companies.filter(c=>c.status==="aktiv");
-    const expenses=m.upkeep+m.staff+Math.round(s.debt*.004)+1700;
+    const land=s.parcels.filter(p=>p.owned).length*350;
+    const expenses=m.upkeep+m.staff+Math.round(s.debt*.004)+land+900;
     s.cash+=tenantRent-expenses;s.monthlyNet=tenantRent-expenses;s.companyIncome=tenantRent;s.expenses=expenses;
     s.history.push({date:s.clock.slice(0,7),income:tenantRent,expenses,cash:s.cash});s.history=s.history.slice(-60);
     addMessage(s,"Monatsabschluss",positive+" Mietverhältnisse · Mieten "+tenantRent.toLocaleString("de-DE")+" € · Betriebskosten "+expenses.toLocaleString("de-DE")+" €.");
@@ -309,5 +426,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,create,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
