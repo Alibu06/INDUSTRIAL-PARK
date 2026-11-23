@@ -132,9 +132,12 @@ function updateMapInfo(){
   }else contents='<div class="info-card"><span class="kicker">DEIN STARTGRUNDSTÜCK</span><b>'+(state.buildings.length?"AM Gewerbepark":"Alles beginnt hier")+"</b><p>"+(state.buildings.length?"Wähle ein Gebäude oder plane die nächste Erweiterung.":"Noch keine Gebäude, Mieter oder internen Straßen. Wähle eine Straße oder einen Gebäudetyp, zeichne den Bauplan und vergleiche anschließend Angebote externer Bauunternehmen.")+'</p><button data-action="open-land">Grundstücke ansehen</button> <button data-action="open-projects">Bauaufträge</button></div>';
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
-  const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
+  const selectedAsset=ui.tool.startsWith("asset:")?S.ASSET_INDEX[ui.tool.slice(6)]:null;
+   const selectedDoor=ui.tool.startsWith("door:")?S.DOOR_MODELS[ui.tool.slice(5)]:ui.tool.startsWith("window:")?S.WINDOW_MODELS[ui.tool.slice(7)]:null;
+   const selectedZone=ui.tool.startsWith("zone:")?S.ZONE_TYPES[ui.tool.slice(5)]:null;
+   const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
   const floorFinish=ui.tool.startsWith("floorfinish:")?S.FLOOR_FINISHES[ui.tool.slice(12)]:null;
-  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
+  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":selectedAsset?selectedAsset.name+" · "+selectedAsset.w+" × "+selectedAsset.d+" m · "+euros(selectedAsset.price)+" · R drehen":selectedDoor?selectedDoor.name+" · Wand anklicken · "+euros(selectedDoor.price):selectedZone?"Zone zeichnen: "+selectedZone.name+" · Anforderungen prüfen":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
  }
  $("mapInfo").innerHTML=contents;
 }
@@ -390,11 +393,17 @@ function floorClick(e){
  if(ui.tool==="wall"){
   if(!ui.wallStart){ui.wallStart={x:h.nx,y:h.ny};notify("Endpunkt der Wand wählen.");}
   else{const a=ui.wallStart;ui.wallStart=null;let ex=h.nx,ey=h.ny;if(a.x!==ex&&a.y!==ey){if(Math.abs(a.x-ex)>Math.abs(a.y-ey))ey=a.y;else ex=a.x;}checkpoint();const res=S.setWall(state,b.id,ui.floorIndex,a.x,a.y,ex,ey,false);choice(res.ok,res.message||"Wand eingefügt.");}
- }else if(ui.tool==="door"){const edge=wallSurface||pickWall(f,h);if(f.walls[edge])checkpoint();const res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
+ }else if(ui.tool==="door"||ui.tool.startsWith("door:")||ui.tool.startsWith("window:")){
+  const edge=wallSurface||(h.inside?pickWall(f,h):null),windowTool=ui.tool.startsWith("window:");
+  if(!edge||!f.walls[edge]){notify("Bitte die Wand direkt anklicken.",true);return;}
+  checkpoint();const model=ui.tool.includes(":")?ui.tool.split(":")[1]:"standard";
+  const res=S.installOpening(state,b.id,ui.floorIndex,edge,windowTool?"window":"door",model);
+  if(!res.ok)undoStack.pop();choice(res.ok,res.message||((windowTool?"Fenster":"Tür")+" eingebaut · "+euros(res.cost)));
+ }
  else if(ui.tool==="erase"){
-  const i=h.inside?f.items.find(i=>i.x===h.x&&i.y===h.y):null;checkpoint();
-  if(i){f.items=f.items.filter(j=>j!==i);if(i.deviceId)state.devices=state.devices.filter(d=>d.id!==i.deviceId);notify("Objekt entfernt.");}
-  else{const edge=wallSurface||pickWall(f,h);delete f.walls[edge];delete f.doors[edge];if(f.wallFinishes)delete f.wallFinishes[edge];notify("Wandsegment entfernt.");}
+  const i=h.inside?f.items.slice().reverse().find(it=>h.fx>=it.x&&h.fx<it.x+(it.w||1)&&h.fy>=it.y&&h.fy<it.y+(it.d||1)):null;checkpoint();
+  if(i){S.removeAsset(state,b.id,ui.floorIndex,i.id);notify("Objekt entfernt / verkauft.");}
+  else{const edge=wallSurface||(h.inside?pickWall(f,h):null);if(!edge){undoStack.pop();notify("Keine Wand ausgewählt.",true);return;}const op=S.removeOpening(state,b.id,ui.floorIndex,edge);if(op.ok){notify("Tür oder Fenster entfernt.");}else{delete f.walls[edge];delete f.doors[edge];if(f.windows)delete f.windows[edge];if(f.wallFinishes)delete f.wallFinishes[edge];notify("Wandsegment entfernt.");}}
  }else if(ui.tool.startsWith("finish:")){
   const edge=wallSurface||(h.inside?pickWall(f,h):null);
   if(!edge||!f.walls[edge]){notify("Bitte eine vorhandene Wand anklicken.",true);return;}
@@ -402,7 +411,13 @@ function floorClick(e){
   if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Wandoberfläche geändert · "+euros(res.cost));
  }else if(ui.tool.startsWith("floorfinish:")){if(!h.inside)return;checkpoint();const res=S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12));if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Bodenbelag verlegt · "+euros(res.cost));}
  else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
- else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
+ else if(ui.tool.startsWith("asset:")){
+   const def=S.ASSET_INDEX[ui.tool.slice(6)];
+   if(!def){notify("Katalogobjekt fehlt.",true);return;}
+   const px=Math.max(0,Math.round(h.fx*4)/4),py=Math.max(0,Math.round(h.fy*4)/4);
+   checkpoint();const r=S.placeAsset(state,b.id,ui.floorIndex,def.id,px,py,ui.rotation,ui.assetVariant);
+   if(!r.ok)undoStack.pop();choice(r.ok,r.message||def.name+" platziert · "+euros(r.cost));
+ }else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
  refresh();
 }
 function worldClick(e){
@@ -605,7 +620,7 @@ window.addEventListener("keydown",e=>{
  if(e.ctrlKey&&e.key.toLowerCase()==="s"){e.preventDefault();saveGame();}
  if(e.ctrlKey&&e.key.toLowerCase()==="z"){e.preventDefault();restoreHistory(e.shiftKey?"redo":"undo");}
  if(e.ctrlKey&&e.key.toLowerCase()==="y"){e.preventDefault();restoreHistory("redo");}
- if(e.key.toLowerCase()==="r"&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)&&ui.mode==="world"){ui.rotation=(ui.rotation+1)%2;refresh();notify("Ausrichtung: "+(ui.rotation?"90°":"0°"));}
+ if(e.key.toLowerCase()==="r"&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){ui.rotation=(ui.rotation+1)%2;refresh();notify("Ausrichtung: "+(ui.rotation?"90°":"0°"));}
  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&e.target.tagName!=="INPUT"){const amt=28;e.preventDefault();ui.cam.panX+=e.key==="ArrowLeft"?amt:e.key==="ArrowRight"?-amt:0;ui.cam.panY+=e.key==="ArrowUp"?amt:e.key==="ArrowDown"?-amt:0;}
 });
 window.addEventListener("keyup",e=>{if(e.key===" ")spaceDown=false;});
