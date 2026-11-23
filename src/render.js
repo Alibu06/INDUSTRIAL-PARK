@@ -13,8 +13,28 @@ function factory(canvas){
  function resize(){const r=canvas.getBoundingClientRect();cw=Math.max(1,r.width);ch=Math.max(1,r.height);dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(cw*dpr);canvas.height=Math.round(ch*dpr);}
  function worldP(x,y,z,u){let q=u.cam;return {x:cw/2+((x-y)-(q.cx-q.cy))*32*q.zoom+q.panX,y:ch/2+((x+y)-(q.cx+q.cy))*16*q.zoom+q.panY-z*q.zoom};}
  function unproject(mx,my,u){const q=u.cam,dx=(mx-cw/2-q.panX)/(32*q.zoom)+(q.cx-q.cy),dy=(my-ch/2-q.panY)/(16*q.zoom)+(q.cx+q.cy);return {x:Math.floor((dx+dy)/2),y:Math.floor((dy-dx)/2)};}
- function floorGeom(u,f){const size=clip(Math.min((cw-110)/f.cols,(ch-100)/f.rows),13,32)*u.cam.floorZoom;return {size,x:(cw-f.cols*size)/2+u.cam.floorX,y:(ch-f.rows*size)/2+u.cam.floorY};}
- function floorHit(mx,my,u,b){const f=b.floors[u.floorIndex]||b.floors[0],g=floorGeom(u,f),fx=(mx-g.x)/g.size,fy=(my-g.y)/g.size;return {x:Math.floor(fx),y:Math.floor(fy),nx:Math.round(fx),ny:Math.round(fy),fx,fy,inside:fx>=0&&fy>=0&&fx<f.cols&&fy<f.rows,g};}
+ function floorGeom(u,f){
+   if(u.floorView==="plan"){
+     const size=clip(Math.min((cw-110)/f.cols,(ch-100)/f.rows),13,32)*u.cam.floorZoom;
+     return {size,x:(cw-f.cols*size)/2+u.cam.floorX,y:(ch-f.rows*size)/2+u.cam.floorY,iso:false,cols:f.cols,rows:f.rows};
+   }
+   const sum=f.cols+f.rows;
+   const size=clip(Math.min((cw-110)/sum,(ch-160)/(sum*.5)),5,23)*u.cam.floorZoom;
+   return {size,x:(cw-sum*size)/2+u.cam.floorX,y:(ch-sum*size*.5)/2+u.cam.floorY+16,iso:true,cols:f.cols,rows:f.rows};
+ }
+ function floorPoint(g,x,y,z=0){
+   if(g.iso)return {x:g.x+(x-y+g.rows)*g.size,y:g.y+(x+y)*g.size*.5-z*g.size};
+   return {x:g.x+x*g.size,y:g.y+y*g.size-z*g.size};
+ }
+ function floorHit(mx,my,u,b){
+   const f=b.floors[u.floorIndex]||b.floors[0],g=floorGeom(u,f);
+   let fx,fy;
+   if(g.iso){
+     const dx=(mx-g.x)/g.size-g.rows,dy=(my-g.y)/(g.size*.5);
+     fx=(dx+dy)/2;fy=(dy-dx)/2;
+   }else{fx=(mx-g.x)/g.size;fy=(my-g.y)/g.size;}
+   return {x:Math.floor(fx),y:Math.floor(fy),nx:Math.round(fx),ny:Math.round(fy),fx,fy,inside:fx>=0&&fy>=0&&fx<f.cols&&fy<f.rows,g};
+ }
  function drawText(text,x,y,size,color,bold,align){
   c.save();c.font=(bold?"600 ":"")+" "+size+"px Inter,Segoe UI,Arial,sans-serif";c.fillStyle=color;c.textAlign=align||"center";c.textBaseline="middle";c.fillText(text,x,y);c.restore();
  }
