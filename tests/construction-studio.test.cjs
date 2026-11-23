@@ -83,3 +83,17 @@ test("complete workstation sets are atomic and consist of individually removable
  const blocked=S.placeSet(s,b.id,0,"workstation",2,2);
  assert.equal(blocked.ok,false);assert.equal(JSON.stringify(s),before);
 });
+
+test("freeform holes cannot be furnished, painted or filled with orphaned walls",()=>{
+ const state=S.create(),cells=[
+   {x:5,y:12},{x:6,y:12},{x:7,y:12},{x:5,y:13},
+   {x:7,y:13},{x:5,y:14},{x:6,y:14},{x:7,y:14}
+ ];
+ const placed=S.commission(state,{tool:"office",cells},"rheinbau");
+ assert.equal(placed.ok,true);const b=placed.building,level=0;
+ assert.equal(S.validCell(b.floors[level],5,5),false);
+ assert.equal(S.paint(state,b.id,level,5,5,"office").ok,false);
+ assert.equal(S.finishFloor(state,b.id,level,5,5,"oak").ok,false);
+ assert.equal(S.setWall(state,b.id,level,5,5,6,5,false).ok,false);
+ assert.equal(S.placeAsset(state,b.id,level,"desk160",5,5).ok,false);
+});
