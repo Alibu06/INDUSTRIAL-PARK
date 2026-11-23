@@ -343,27 +343,78 @@ $("layersBtn").addEventListener("click",()=>{const list=["normal","traffic","vac
 $("fitBtn").addEventListener("click",()=>{if(ui.mode==="floor"){ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;}else{ui.cam.zoom=.86;ui.cam.panX=0;ui.cam.panY=0;ui.cam.cx=23;ui.cam.cy=20;}refresh();});
 canvas.addEventListener("contextmenu",menuAt);
 canvas.addEventListener("pointerdown",e=>{
- if(e.button===1||(e.button===0&&spaceDown)){drag={x:e.clientX,y:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);e.preventDefault();return;}
- if(e.button!==0)return;
- pressed=true;drag={x:e.clientX,y:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);
+ if(e.button!==0&&e.button!==1)return;
+ $("contextMenu").classList.add("hidden");
+ const p=getLocation(e);
+ if(e.button===1||(e.button===0&&spaceDown)){
+   drag={mode:"pan",x:e.clientX,y:e.clientY,moved:false};
+ }else if(ui.mode==="world"&&["road","parking","tree"].includes(ui.tool)){
+   const h=renderer.hitWorld(p.x,p.y,ui);
+   drag={mode:"build",start:h,end:h,x:e.clientX,y:e.clientY,moved:false};
+   ui.dragBuild=pathCells(ui.tool,h,h);updateToolStats();
+ }else if(ui.mode==="floor"&&ui.tool.startsWith("room:")){
+   drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false};
+   const b=building(ui.selectedId),h=b&&renderer.hitFloor(p.x,p.y,ui,b);
+   if(h&&h.inside){checkpoint();S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));drag.seen.add(h.x+","+h.y);}
+ }else{
+   drag={mode:"click",x:e.clientX,y:e.clientY,moved:false};
+ }
+ pressed=true;canvas.setPointerCapture(e.pointerId);
+ if(e.button===1||spaceDown)e.preventDefault();
 });
 canvas.addEventListener("pointermove",e=>{
- const p=getLocation(e);
- if(drag&&(spaceDown||e.buttons===4)){
-  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>1)drag.moved=true;
-  if(ui.mode==="floor"){ui.cam.floorX+=dx;ui.cam.floorY+=dy;}else{ui.cam.panX+=dx;ui.cam.panY+=dy;}
-  drag.x=e.clientX;drag.y=e.clientY;
- }else if(pressed&&drag&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>8&&ui.mode==="world"&&ui.tool==="select"){
-  drag.moved=true;ui.cam.panX+=e.clientX-drag.x;ui.cam.panY+=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
- }
+ const p=getLocation(e),last=ui.hover,oldFloor=ui.hoverFloor;
  if(ui.mode==="floor"&&building(ui.selectedId))ui.hoverFloor=renderer.hitFloor(p.x,p.y,ui,building(ui.selectedId));
  else ui.hover=renderer.hitWorld(p.x,p.y,ui);
+ if(drag){
+   if(drag.mode==="pan"){
+     const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+     if(Math.abs(dx)+Math.abs(dy)>0)drag.moved=true;
+     if(ui.mode==="floor"){ui.cam.floorX+=dx;ui.cam.floorY+=dy;}
+     else{ui.cam.panX+=dx;ui.cam.panY+=dy;}
+     drag.x=e.clientX;drag.y=e.clientY;
+   }else if(drag.mode==="build"){
+     const h=renderer.hitWorld(p.x,p.y,ui);
+     if(h.x!==drag.end.x||h.y!==drag.end.y){
+       drag.end=h;drag.moved=true;
+       ui.dragBuild=pathCells(ui.tool,drag.start,drag.end);
+       updateToolStats();
+     }
+   }else if(drag.mode==="paint"){
+     const h=ui.hoverFloor,b=building(ui.selectedId);
+     if(h&&h.inside&&b&&!drag.seen.has(h.x+","+h.y)){
+       S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
+       drag.seen.add(h.x+","+h.y);drag.moved=true;
+     }
+   }else if(drag.mode==="click"&&ui.mode==="world"&&ui.tool==="select"){
+     const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+     if(Math.abs(dx)+Math.abs(dy)>5){
+       drag.mode="pan";drag.moved=true;ui.cam.panX+=dx;ui.cam.panY+=dy;
+       drag.x=e.clientX;drag.y=e.clientY;
+     }
+   }else if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>9)drag.moved=true;
+ }
+ if(ui.mode==="world"&&ui.hover&&(!last||ui.hover.x!==last.x||ui.hover.y!==last.y)){updateMapInfo();}
+ else if(ui.mode==="floor"&&ui.hoverFloor&&oldFloor&&(ui.hoverFloor.x!==oldFloor.x||ui.hoverFloor.y!==oldFloor.y)){updateMapInfo();}
 });
 canvas.addEventListener("pointerup",e=>{
- if(drag&&!drag.moved&&e.button===0){if(ui.mode==="floor")floorClick(e);else worldClick(e);}
- drag=null;pressed=false;
+ const held=drag;drag=null;pressed=false;
+ if(!held||e.button!==0){ui.dragBuild=null;return;}
+ if(held.mode==="build"){
+   const points=ui.dragBuild||pathCells(ui.tool,held.start,held.end);
+   const valid=points.some(p=>S.preview(state,ui.tool,p.x,p.y).ok);
+   if(valid)checkpoint();
+   const res=S.placePath(state,ui.tool,points);
+   if(!res.ok&&valid)undoStack.pop();
+   ui.dragBuild=null;
+   choice(res.ok,res.ok?res.count+" Felder gebaut · "+euros(res.cost)+(res.skipped?" · "+res.skipped+" übersprungen":""):res.message);
+   refresh();return;
+ }
+ if(held.mode==="paint"){refresh();return;}
+ if(held.mode==="click"&&!held.moved){if(ui.mode==="floor")floorClick(e);else worldClick(e);}
 });
-canvas.addEventListener("pointerleave",()=>{ui.hover=null;ui.hoverFloor=null;});
+canvas.addEventListener("pointercancel",()=>{drag=null;pressed=false;ui.dragBuild=null;refresh();});
+canvas.addEventListener("pointerleave",()=>{if(!drag){ui.hover=null;ui.hoverFloor=null;updateMapInfo();}});
 canvas.addEventListener("wheel",e=>{
  e.preventDefault();if(ui.mode==="floor")ui.cam.floorZoom=Math.max(.65,Math.min(2,ui.cam.floorZoom*(e.deltaY>0?.88:1.13)));
  else ui.cam.zoom=Math.max(.43,Math.min(2.4,ui.cam.zoom*(e.deltaY>0?.88:1.13)));
@@ -372,6 +423,9 @@ window.addEventListener("keydown",e=>{
  if(e.key===" "&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){spaceDown=true;e.preventDefault();}
  if(e.key==="Escape"){if(ui.mode==="floor")setViewWorld();else if(ui.tool!=="select")toolAction("select");else closePanel();}
  if(e.ctrlKey&&e.key.toLowerCase()==="s"){e.preventDefault();saveGame();}
+ if(e.ctrlKey&&e.key.toLowerCase()==="z"){e.preventDefault();restoreHistory(e.shiftKey?"redo":"undo");}
+ if(e.ctrlKey&&e.key.toLowerCase()==="y"){e.preventDefault();restoreHistory("redo");}
+ if(e.key.toLowerCase()==="r"&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)&&ui.mode==="world"){ui.rotation=(ui.rotation+1)%2;refresh();notify("Ausrichtung: "+(ui.rotation?"90°":"0°"));}
  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&e.target.tagName!=="INPUT"){const amt=28;e.preventDefault();ui.cam.panX+=e.key==="ArrowLeft"?amt:e.key==="ArrowRight"?-amt:0;ui.cam.panY+=e.key==="ArrowUp"?amt:e.key==="ArrowDown"?-amt:0;}
 });
 window.addEventListener("keyup",e=>{if(e.key===" ")spaceDown=false;});
