@@ -93,7 +93,7 @@ function updateMapInfo(){
   }else if(ui.tool!=="select"){
    const tool=worldTools.find(t=>t[0]===ui.tool);
    let cost=S.TYPES[ui.tool]?S.TYPES[ui.tool].cost:({road:9000,parking:4400,tree:750})[ui.tool];
-   const p=ui.hover&&S.preview(state,ui.tool,ui.hover.x,ui.hover.y,ui.rotation);
+   const p=ui.hover&&ui.tool!=="demolish"&&S.preview(state,ui.tool,ui.hover.x,ui.hover.y,ui.rotation);
    contents='<div class="info-card"><span class="kicker">BAUMODUS AKTIV</span><b>'+esc(tool?tool[2]:"Bauen")+'</b><p>'+(S.TYPES[ui.tool]?"Grundfläche: "+(p?p.w:S.TYPES[ui.tool].w)*4+" × "+(p?p.h:S.TYPES[ui.tool].h)*4+" m · R zum Drehen":"Klicken oder Fläche mit der Maus aufziehen")+(cost?" · Kosten: "+euros(cost):"")+'</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+(p.ok?"✓ ":"⚠ ")+esc(p.message)+(p.ok&&!p.roadAccess&&S.TYPES[ui.tool]?" · Zufahrt prüfen":"")+'</div>':"")+'</div>';
   }else contents='<div class="info-card"><span class="kicker">STANDORTÜBERSICHT</span><b>AM Gewerbepark</b><p>Wähle ein Gebäude oder beginne mit einem Bauprojekt. Alle Unternehmen arbeiten eigenständig weiter.</p></div>';
  }else{
@@ -268,7 +268,7 @@ function floorClick(e){
 function worldClick(e){
  const pos=getLocation(e),h=renderer.hitWorld(pos.x,pos.y,ui);
  if(ui.tool==="select"){
-  const b=state.buildings.slice().reverse().find(b=>h.x>=b.x&&h.x<b.x+b.w&&h.y>=b.y&&h.y<b.y+b.h);
+  const b=renderer.pickBuilding(pos.x,pos.y,ui,state)||state.buildings.slice().reverse().find(b=>h.x>=b.x&&h.x<b.x+b.w&&h.y>=b.y&&h.y<b.y+b.h);
   selectBuilding(b);return;
  }
  const isDemolition=ui.tool==="demolish",p=isDemolition?{ok:true}:S.preview(state,ui.tool,h.x,h.y,ui.rotation);
@@ -284,7 +284,7 @@ function menuAt(e){
   menu.innerHTML='<button data-action="floor-door">Tür auf Wand einfügen</button><button data-action="floor-remove">Wand / Objekt entfernen</button><hr/><button data-action="world-view">Außenansicht</button>';
   menuTarget=p;
  }else{
-  const h=renderer.hitWorld(p.x,p.y,ui),b=state.buildings.find(b=>h.x>=b.x&&h.x<b.x+b.w&&h.y>=b.y&&h.y<b.y+b.h);
+  const h=renderer.hitWorld(p.x,p.y,ui),b=renderer.pickBuilding(p.x,p.y,ui,state)||state.buildings.find(b=>h.x>=b.x&&h.x<b.x+b.w&&h.y>=b.y&&h.y<b.y+b.h);
   menuTarget=b?{buildingId:b.id}:h;
   menu.innerHTML=b?'<button data-action="context-inspect">Objektdaten</button><button data-action="context-floor">Innenausbau</button><button data-action="context-leasing">Vermietung</button>':'<button data-action="context-road">Hier Straße bauen</button><button data-action="context-parking">Hier Parkplatz bauen</button><button data-action="context-office">Hier Bürogebäude planen</button>';
  }menu.classList.remove("hidden");
