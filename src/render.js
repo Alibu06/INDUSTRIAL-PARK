@@ -105,12 +105,48 @@ function factory(canvas){
       c.strokeStyle="#596d72";c.strokeRect(vent.x-11*u.cam.zoom,vent.y-9*u.cam.zoom,22*u.cam.zoom,15*u.cam.zoom);
     }
   }
+  if(!construction&&u.cam.zoom>.53){
+    const roof=(xx,yy,height=0)=>worldP(b.x+xx,b.y+yy,h+height,u);
+    const flat=(xx,yy,ww,hh,fill,stroke)=>polygon(c,[roof(xx,yy),roof(xx+ww,yy),roof(xx+ww,yy+hh),roof(xx,yy+hh)],fill,stroke||"rgba(52,80,87,.18)",.7*u.cam.zoom);
+    const z=u.cam.zoom;
+    if(b.type==="office"||b.type==="service"){
+      const cols=Math.max(2,Math.floor(b.w/1.3));
+      for(let j=0;j<cols;j++){
+        flat(.65+j*.96,.7,.72,.76,"#426a7c","#a8c7c9");
+        line(c,roof(.69+j*.96,1.05),roof(1.28+j*.96,1.05),"rgba(192,224,231,.55)",.6*z);
+      }
+      flat(b.w-.95,b.h-.95,.65,.57,"#718f96","#4e6e78");
+      const p=roof(b.w-.65,b.h-.65,5);
+      polygon(c,[roof(b.w-.9,b.h-.85),roof(b.w-.32,b.h-.85),p,roof(b.w-.9,b.h-.35)],"#6e8b92");
+      const entry=worldP(b.x+b.w*.57,b.y+b.h,8,u);
+      c.fillStyle="#3f6575";c.beginPath();c.roundRect(entry.x-7*z,entry.y-15*z,15*z,19*z,z);c.fill();
+      c.strokeStyle="#bad7db";c.lineWidth=.7*z;c.strokeRect(entry.x-7*z,entry.y-15*z,15*z,19*z);
+      line(c,{x:entry.x,y:entry.y-13*z},{x:entry.x,y:entry.y+3*z},"#bad0d4",.8*z);
+    }else if(b.type==="warehouse"){
+      for(let xx=.75;xx<b.w-1;xx+=1.4){
+        flat(xx,.8,.86,b.h-1.6,"#516b78","#84a9b3");
+        line(c,roof(xx+.43,.81),roof(xx+.43,b.h-.81),"rgba(166,204,217,.5)",z);
+      }
+      const vent=roof(b.w-.7,.4,2);ellipse(vent.x,vent.y,4*z,2.1*z,"#708a8e");
+    }else if(b.type==="workshop"){
+      for(let xx=.65;xx<b.w-.55;xx+=1.1)flat(xx,.78,.58,b.h-1.6,"#7897a0","#e6eff1");
+      const frontage=worldP(b.x+b.w*.55,b.y+b.h,3,u);
+      c.fillStyle="#455b64";c.fillRect(frontage.x-10*z,frontage.y-12*z,20*z,13*z);
+      for(let j=1;j<4;j++)line(c,{x:frontage.x-10*z,y:frontage.y-12*z+j*3*z},{x:frontage.x+10*z,y:frontage.y-12*z+j*3*z},"#becdca",z);
+    }else if(b.type==="cafe"){
+      flat(.6,.6,1,.7,"#849b83","#cadac2");
+      const terrace=worldP(b.x+b.w+.6,b.y+b.h*.6,0,u);
+      ellipse(terrace.x,terrace.y,9*z,4*z,"#d0c6ad");
+      ellipse(terrace.x,terrace.y-5*z,7*z,3*z,"#9d7762");
+      line(c,{x:terrace.x,y:terrace.y-5*z},{x:terrace.x,y:terrace.y+3*z},"#7e6757",2*z);
+    }
+  }
   if(construction){
     const p=worldP(b.x+b.w/2,b.y+b.h/2,h+12,u);
     c.fillStyle="#f5bb63";c.fillRect(p.x-27*u.cam.zoom,p.y-3*u.cam.zoom,54*u.cam.zoom,6*u.cam.zoom);
     drawText("BAU "+b.construction+" T",p.x,p.y-17*u.cam.zoom,11*u.cam.zoom,"#533a14",true);
   }
-  if(u.cam.zoom>.52){
+  if(selected||hover||u.cam.zoom>1.25){
     const p=worldP(b.x+b.w/2,b.y+b.h/2,h+24,u);
     // The nameplate lives above the roof rather than covering the building.
     c.fillStyle="rgba(17,33,44,.91)";const txt=b.name,tw=Math.min(210,txt.length*6.6+22);
