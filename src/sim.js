@@ -50,8 +50,8 @@
     for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)f.tiles[key(x,y)]=kind;
     return f;
   }
-  function makeBuilding(s,type,x,y,ready){
-    const t=TYPES[type]; const b={id:id(s,"B"),name:t.name+" "+String.fromCharCode(65+s.buildings.length),type,x,y,w:t.w,h:t.h,condition:88,construction:ready?0:t.days,levels:t.levels,floors:[],tenantId:null};
+  function makeBuilding(s,type,x,y,ready,rotation=0){
+    const t=TYPES[type],swapped=Math.abs(rotation)%2===1; const b={id:id(s,"B"),name:t.name+" "+String.fromCharCode(65+s.buildings.length),type,x,y,w:swapped?t.h:t.w,h:swapped?t.w:t.h,rotation:swapped?1:0,condition:88,construction:ready?0:t.days,levels:t.levels,floors:[],tenantId:null};
     for(let i=0;i<t.levels;i++)b.floors.push(floorFor(b,i));
     s.buildings.push(b);return b;
   }
@@ -100,29 +100,60 @@
     if(s.buildings.some(b=>x<b.x+b.w&&x+w>b.x&&y<b.y+b.h&&y+h>b.y))return "Gebäude steht im Baufeld";
     return "";
   }
-  function place(s,tool,x,y){
+  const SITE_COSTS={road:9000,parking:4400,tree:750};
+  function preview(s,tool,x,y,rotation=0){
     x=Math.floor(x);y=Math.floor(y);
     if(TYPES[tool]){
-      const t=TYPES[tool],err=overlap(s,x,y,t.w,t.h);
-      if(err)return {ok:false,message:err};
-      if(s.cash<t.cost)return {ok:false,message:"Nicht ausreichend Liquidität"};
-      s.cash-=t.cost;
-      const b=makeBuilding(s,tool,x,y,false);
-      s.parking=s.parking.filter(p=>{const [px,py]=p.split(",").map(Number);return !(px>=x&&px<x+t.w&&py>=y&&py<y+t.h);});
-      s.trees=s.trees.filter(p=>{const [px,py]=p.split(",").map(Number);return !(px>=x-1&&px<x+t.w+1&&py>=y-1&&py<y+t.h+1);});
-      addMessage(s,"Bauauftrag vergeben",b.name+" wird in "+t.days+" Tagen fertiggestellt. Investition: "+t.cost.toLocaleString("de-DE")+" €.");
-      return {ok:true,building:b};
+      const t=TYPES[tool],swap=Math.abs(rotation)%2===1,w=swap?t.h:t.w,h=swap?t.w:t.h;
+      const error=overlap(s,x,y,w,h);
+      const parkingCollision=s.parking.some(p=>{const [px,py]=p.split(",").map(Number);return px>=x&&px<x+w&&py>=y&&py<y+h;});
+      const valid=!error&&!parkingCollision&&s.cash>=t.cost;
+      let nearby=false;
+      for(let yy=y-2;yy<y+h+2;yy++)for(let xx=x-2;xx<x+w+2;xx++){
+        if(xx>=0&&yy>=0&&xx<s.world.w&&yy<s.world.h&&s.roads.includes(key(xx,yy)))nearby=true;
+      }
+      return {ok:valid,x,y,w,h,cost:t.cost,roadAccess:nearby,
+        message:error|| (parkingCollision?"Vorhandene Parkplätze zuerst entfernen":s.cash<t.cost?"Zu wenig Kapital":"Baufläche frei")};
     }
-    const p=key(x,y);
-    if(x<0||y<0||x>=s.world.w||y>=s.world.h)return {ok:false,message:"Außerhalb des Kartenbereichs"};
-    if(s.buildings.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h))return {ok:false,message:"Hier steht ein Gebäude"};
-    const costs={road:9000,parking:4400,tree:750};
-    if(!(tool in costs))return {ok:false,message:"Unbekanntes Bauwerkzeug"};
-    if(s.cash<costs[tool])return {ok:false,message:"Nicht ausreichend Liquidität"};
-    if(tool==="road"){if(s.roads.includes(p))return {ok:false,message:"Straße bereits vorhanden"};s.roads.push(p);s.parking=s.parking.filter(a=>a!==p);}
-    if(tool==="parking"){if(s.parking.includes(p)||s.roads.includes(p))return {ok:false,message:"Stellfläche nicht verfügbar"};s.parking.push(p);}
-    if(tool==="tree"){if(s.roads.includes(p)||s.trees.includes(p))return {ok:false,message:"Fläche ist belegt"};s.trees.push(p);}
-    s.cash-=costs[tool];return {ok:true};
+    if(!(tool in SITE_COSTS))return {ok:false,x,y,w:1,h:1,cost:0,message:"Unbekanntes Bauwerkzeug"};
+    if(x<0||y<0||x>=s.world.w||y>=s.world.h)return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Außerhalb der Karte"};
+    if(s.buildings.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h))return {ok:false,x,y,w:1,h:1,cost:SITE_COSTS[tool],message:"Hier steht ein Gebäude"};
+    const k=key(x,y),road=s.roads.includes(k),park=s.parking.includes(k),tree=s.trees.includes(k);
+    const err=tool==="road"?(road?"Straße bereits vorhanden":park?"Parkplatz muss zuerst entfernt werden":""):
+      tool==="parking"?(road||park?"Bereits befestigte Fläche":""):
+      (road||park||tree?"Fläche ist bereits belegt":"");
+    return {ok:!err&&s.cash>=SITE_COSTS[tool],x,y,w:1,h:1,cost:SITE_COSTS[tool],
+      message:err|| (s.cash<SITE_COSTS[tool]?"Zu wenig Kapital":"Baufeld frei")};
+  }
+  function place(s,tool,x,y,rotation=0){
+    const p=preview(s,tool,x,y,rotation);
+    if(!p.ok)return {ok:false,message:p.message};
+    s.cash-=p.cost;
+    if(TYPES[tool]){
+      const t=TYPES[tool],b=makeBuilding(s,tool,p.x,p.y,false,rotation);
+      s.trees=s.trees.filter(pos=>{const [tx,ty]=pos.split(",").map(Number);return !(tx>=p.x-1&&tx<p.x+p.w+1&&ty>=p.y-1&&ty<p.y+p.h+1);});
+      addMessage(s,"Bauauftrag vergeben",b.name+" wird in "+t.days+" Tagen fertiggestellt. Investition: "+t.cost.toLocaleString("de-DE")+" €.");
+      return {ok:true,building:b,cost:p.cost};
+    }
+    const k=key(p.x,p.y);
+    if(tool==="road")s.roads.push(k);
+    if(tool==="parking")s.parking.push(k);
+    if(tool==="tree")s.trees.push(k);
+    if(tool!=="tree")s.trees=s.trees.filter(v=>v!==k);
+    return {ok:true,cost:p.cost};
+  }
+  function placePath(s,tool,points){
+    if(!["road","parking","tree"].includes(tool))return {ok:false,message:"Das Werkzeug unterstützt kein Ziehen."};
+    const uniq=[],seen=new Set();for(const p of points){
+      const k=key(Math.floor(p.x),Math.floor(p.y));if(!seen.has(k)){seen.add(k);uniq.push({x:Math.floor(p.x),y:Math.floor(p.y)});}
+    }
+    const valid=uniq.filter(p=>preview(s,tool,p.x,p.y).ok);
+    const cost=valid.length*SITE_COSTS[tool];
+    if(!valid.length)return {ok:false,message:"Keine freie Baufläche gefunden."};
+    if(cost>s.cash)return {ok:false,message:"Die gesamte Bauauswahl kostet "+cost.toLocaleString("de-DE")+" €, die Liquidität reicht nicht."};
+    // Check collisions once more so a path cannot partially reserve a building footprint.
+    for(const p of valid){const result=place(s,tool,p.x,p.y);if(!result.ok)return {ok:false,message:result.message};}
+    return {ok:true,count:valid.length,skipped:uniq.length-valid.length,cost};
   }
   function demolish(s,x,y){
     const b=s.buildings.find(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
@@ -278,5 +309,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,create,place,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,create,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
