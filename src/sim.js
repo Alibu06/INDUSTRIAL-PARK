@@ -184,6 +184,20 @@
       q.name+" übernimmt "+(building?building.name:points.length+" Felder "+tool)+". Festpreis "+q.price.toLocaleString("de-DE")+" €, Bauzeit "+q.days+" Tage.");
     return {ok:true,project,building,cost:q.price};
   }
+  function cancelProject(s,projectId){
+    const p=s.projects.find(p=>p.id===projectId);
+    if(!p||p.status!=="bau")return {ok:false,message:"Nur laufende Bauaufträge können storniert werden"};
+    const refund=Math.round(p.quote*.70*Math.max(0,p.remaining)/p.totalDays);
+    p.status="storniert";p.cancelled=s.clock.slice(0,10);p.refund=refund;
+    if(p.buildingId){
+      s.buildings=s.buildings.filter(b=>b.id!==p.buildingId);
+      s.devices=s.devices.filter(d=>d.buildingId!==p.buildingId);
+      s.tickets=s.tickets.filter(t=>t.buildingId!==p.buildingId);
+    }
+    s.cash+=refund;
+    addMessage(s,"Bauauftrag storniert",p.contractorName+" · Rückerstattung "+refund.toLocaleString("de-DE")+" €; bereits entstandene Aufwendungen bleiben verloren.","warning");
+    return {ok:true,refund};
+  }
   function overlap(s,x,y,w,h){
     if(x<1||y<1||x+w>s.world.w-1||y+h>s.world.h-1)return "Außerhalb der Spielwelt";
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(!isOwned(s,xx,yy))return "Grundstück nicht im Eigentum – zuerst Fläche ankaufen";
@@ -253,7 +267,7 @@
   }
   function demolish(s,x,y){
     const b=s.buildings.find(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
-    if(b){if(b.tenantId)return {ok:false,message:"Vermietetes Gebäude kann nicht abgerissen werden"};s.cash-=12000;s.buildings=s.buildings.filter(a=>a!==b);s.devices=s.devices.filter(d=>d.buildingId!==b.id);addMessage(s,"Rückbau abgeschlossen",b.name+" wurde zurückgebaut.");return {ok:true};}
+    if(b){if(s.projects.some(p=>p.buildingId===b.id&&p.status==="bau"))return {ok:false,message:"Für laufende Bauvorhaben zuerst den Bauauftrag stornieren"};if(b.tenantId)return {ok:false,message:"Vermietetes Gebäude kann nicht abgerissen werden"};s.cash-=12000;s.buildings=s.buildings.filter(a=>a!==b);s.devices=s.devices.filter(d=>d.buildingId!==b.id);addMessage(s,"Rückbau abgeschlossen",b.name+" wurde zurückgebaut.");return {ok:true};}
     const p=key(x,y);for(const name of ["roads","parking","trees"]){if(s[name].includes(p)){s[name]=s[name].filter(k=>k!==p);return {ok:true};}}
     return {ok:false,message:"Hier befindet sich kein Bauobjekt"};
   }
@@ -426,5 +440,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
