@@ -192,7 +192,7 @@
   function addMessage(s,title,body,level){s.messages.unshift({id:id(s,"MSG"),date:s.clock.slice(0,10),title,body,level:level||"info"});s.messages=s.messages.slice(0,65);}
   function floorFor(b,idx){
     const kind=b.type==="warehouse"?"hall":b.type==="workshop"?"workshop":b.type==="cafe"?"kitchen":"office";
-    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},wallFinishes:{},floorFinishes:{},items:[]};
+    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},windows:{},zones:{},wallFinishes:{},floorFinishes:{},items:[]};
     // Complete shell: each exterior wall is also an individually editable segment.
     for(let x=0;x<f.cols;x++){f.walls["H:"+x+":0"]=1;f.walls["H:"+x+":"+f.rows]=1;}
     for(let y=0;y<f.rows;y++){f.walls["V:0:"+y]=1;f.walls["V:"+f.cols+":"+y]=1;}
@@ -449,7 +449,7 @@
     x1=Math.round(x1);y1=Math.round(y1);x2=Math.round(x2);y2=Math.round(y2);
     if(x1!==x2&&y1!==y2)return {ok:false,message:"Wände müssen gerade verlaufen"};
     let count=0;
-    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
+    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.windows)delete f.windows[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     return {ok:count>0,message:count?"":"Keine Segmente ausgewählt"};
   }
@@ -496,6 +496,84 @@
     if(t.device)device(s,b,type,x,y,level);else f.items.push({id:id(s,"ITM"),x,y,type});
     return {ok:true};
   }
+
+  function validCell(f,x,y){return !!f&&x>=0&&y>=0&&x<f.cols&&y<f.rows&&(!f.mask||f.mask.includes(key(Math.floor(x),Math.floor(y))));}
+  function placeAsset(s,bid,level,assetId,x,y,rotation=0,variant){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],def=ASSET_INDEX[assetId];
+    if(!f||!def)return {ok:false,message:"Katalogobjekt nicht vorhanden"};
+    x=Math.round(Number(x)*4)/4;y=Math.round(Number(y)*4)/4;
+    if(!Number.isFinite(x)||!Number.isFinite(y))return {ok:false,message:"Position ungültig"};
+    const w=Math.abs(rotation)%2?def.d:def.w,d=Math.abs(rotation)%2?def.w:def.d;
+    if(x<0||y<0||x+w>f.cols+.0001||y+d>f.rows+.0001)return {ok:false,message:"Außerhalb des Gebäudes"};
+    for(let yy=Math.floor(y);yy<Math.ceil(y+d);yy++)for(let xx=Math.floor(x);xx<Math.ceil(x+w);xx++)if(!validCell(f,xx,yy))return {ok:false,message:"Außerhalb des Gebäudegrundrisses"};
+    if(def.mount==="wall"&&!Object.keys(f.walls).some(k=>{
+      const [o,ax,ay]=k.split(":");const wx=+ax,wy=+ay;
+      return o==="H"?(y>=wy-.8&&y<=wy+.4&&x<wx+1&&x+w>wx):(x>=wx-.8&&x<=wx+.4&&y<wy+1&&y+d>wy);
+    }))return {ok:false,message:"Geeignete Wand zur Montage fehlt"};
+    const collisions=f.items.filter(it=>{
+      if(it.mount==="ceiling"||def.mount==="ceiling")return false;
+      return x<it.x+(it.w||1)-.01&&x+w>it.x+.01&&y<it.y+(it.d||1)-.01&&y+d>it.y+.01;
+    });
+    const desktop=["computer","router","switch","firewall","nvr","server"].includes(def.base);
+    if(collisions.length&&!(desktop&&collisions.every(it=>["desk","table","rack","shelf"].includes(it.type)))&&def.mount!=="wall")
+      return {ok:false,message:"Stellfläche bereits belegt"};
+    if(desktop&&def.mount==="floor"&&collisions.length===0)return {ok:false,message:"Computer oder Netzwerkgerät benötigt geeignete Aufstellfläche"};
+    if(variant&&!def.variants.includes(variant))return {ok:false,message:"Unbekannte Produktvariante"};
+    if(s.cash<def.price)return {ok:false,message:"Zu wenig Geld"};
+    const it={id:id(s,"ITM"),type:def.base,assetId:def.id,x,y,w,d,h:def.h,mount:def.mount,rotation:rotation%2?1:0,variant:variant||def.variants[0]};
+    s.cash-=def.price;f.items.push(it);
+    if(["printer","hvac","light","toilet","sink","camera","alarm","sprinkler","reader","machine","router","switch","firewall","server","rack","wifi","nvr","motion","contact","ups","emergencyLight"].includes(def.base)){
+      const dev={id:id(s,"DEV"),buildingId:bid,floor:level,x,y,type:def.base,assetId:def.id,state:"ok",condition:95,uses:0};
+      s.devices.push(dev);it.deviceId=dev.id;
+    }
+    return {ok:true,item:it,cost:def.price};
+  }
+  function removeAsset(s,bid,level,itemId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],it=f&&f.items.find(it=>it.id===itemId);
+    if(!it)return {ok:false,message:"Objekt nicht gefunden"};
+    f.items=f.items.filter(x=>x!==it);
+    if(it.deviceId){s.devices=s.devices.filter(d=>d.id!==it.deviceId);s.tickets=s.tickets.filter(t=>t.deviceId!==it.deviceId);}
+    const price=ASSET_INDEX[it.assetId]?.price||ITEM_TYPES[it.type]?.cost||0;
+    s.cash+=Math.round(price*.5);return {ok:true,refund:Math.round(price*.5)};
+  }
+  function installOpening(s,bid,level,edge,kind,modelId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],models=kind==="door"?DOOR_MODELS:kind==="window"?WINDOW_MODELS:null,model=models&&models[modelId];
+    if(!f||!model)return {ok:false,message:"Bauteil nicht bekannt"};
+    const [axis,xs,ys]=String(edge).split(":"),x=Number(xs),y=Number(ys);
+    if(!["H","V"].includes(axis)||!Number.isInteger(x)||!Number.isInteger(y))return {ok:false,message:"Wandsegment ungültig"};
+    const keys=Array.from({length:model.width},(_,i)=>axis+":"+(x+(axis==="H"?i:0))+":"+(y+(axis==="V"?i:0)));
+    if(keys.some(k=>!f.walls[k]))return {ok:false,message:"Zusammenhängende Wandfläche für "+model.width+" m Öffnung fehlt"};
+    if(keys.some(k=>f.doors[k]||f.windows&&f.windows[k]))return {ok:false,message:"Wandöffnung bereits belegt"};
+    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(yy!==0&&yy!==f.rows):(xx!==0&&xx!==f.cols);}))
+      return {ok:false,message:"Fenster benötigen eine Außenwand"};
+    if(s.cash<model.price)return {ok:false,message:"Bauteil nicht finanzierbar"};
+    const group=kind==="door"?f.doors:(f.windows||(f.windows={})),item={id:id(s,"OPN"),model:modelId,span:model.width,root:edge};
+    for(const k of keys)group[k]=item;
+    s.cash-=model.price;return {ok:true,opening:item,cost:model.price};
+  }
+  function removeOpening(s,bid,level,edge){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level];
+    if(!f)return {ok:false,message:"Etage fehlt"};
+    for(const col of ["doors","windows"]){const obj=f[col]&&f[col][edge];if(!obj)continue;const root=obj.root||edge;
+      for(const k of Object.keys(f[col]))if(k===edge||f[col][k]?.root===root)delete f[col][k];return {ok:true};}
+    return {ok:false,message:"Keine Wandöffnung vorhanden"};
+  }
+  function paintZone(s,bid,level,x,y,zoneId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level];
+    if(!ZONE_TYPES[zoneId]||!validCell(f,x,y))return {ok:false,message:"Zone außerhalb des Gebäudes"};
+    if(!f.zones)f.zones={};f.zones[key(x,y)]=zoneId;return {ok:true};
+  }
+  function zoneReport(s,bid,level,zoneId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],z=ZONE_TYPES[zoneId];
+    if(!f||!z)return {ok:false,message:"Zone unbekannt"};
+    const cells=Object.keys(f.zones||{}).filter(k=>f.zones[k]===zoneId),count={};
+    for(const it of f.items)if(cells.some(k=>{const [x,y]=k.split(",").map(Number);return it.x<x+1&&it.x+(it.w||1)>x&&it.y<y+1&&it.y+(it.d||1)>y;}))count[it.type]=(count[it.type]||0)+1;
+    const caps={network:(count.router||0)+(count.switch||0),access:count.reader,ventilation:count.hvac,exit:Object.keys(f.doors).length};
+    const requirements=z.needs.map(req=>({name:req,ok:(count[req]||caps[req]||0)>0}));
+    if(cells.length<z.minArea)requirements.push({name:"Mindestfläche "+z.minArea+" m²",ok:false});
+    return {ok:true,zone:zoneId,name:z.name,area:cells.length,requirements,ready:requirements.every(a=>a.ok)};
+  }
+
   function parkingCount(s){return s.parking.length*2;}
   function capacity(b){
     if(!b)return 0;
@@ -615,5 +693,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
