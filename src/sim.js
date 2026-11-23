@@ -50,6 +50,133 @@
     machine:{name:"Maschine",cost:8900,device:true},
     plant:{name:"Pflanze",cost:140}
   };
+  // All coordinates are metres. A 25 cm placement grid is used for interiors,
+  // independently from the coarse 4 m exterior plot grid.
+  const DOOR_MODELS={
+    standard:{name:"Standard-Innentür",width:1,price:490,material:"holz",fire:0,security:0},
+    glass:{name:"Ganzglastür",width:1,price:980,material:"glas",fire:0,security:0},
+    double:{name:"Doppelflügeltür",width:2,price:1540,material:"holz",fire:0,security:0},
+    sliding:{name:"Schiebetür",width:2,price:1650,material:"glas",fire:0,security:0},
+    fire30:{name:"Brandschutztür T30",width:1,price:1690,material:"stahl",fire:30,security:1},
+    fire90:{name:"Brandschutztür T90",width:1,price:2890,material:"stahl",fire:90,security:2},
+    secure:{name:"Sicherheitstür RC3",width:1,price:2650,material:"stahl",fire:0,security:3},
+    garage:{name:"Sektionaltor",width:3,price:5200,material:"metall",fire:0,security:1}
+  };
+  const WINDOW_MODELS={
+    standard:{name:"Isolierglasfenster",width:1,price:590,material:"glas",security:0},
+    double:{name:"Doppelfenster",width:2,price:1150,material:"glas",security:0},
+    panorama:{name:"Panoramafenster",width:3,price:2800,material:"glas",security:0},
+    fire:{name:"Brandschutzverglasung",width:1,price:1780,material:"brandschutzglas",security:1},
+    secure:{name:"Sicherheitsfenster RC3",width:1,price:1850,material:"sicherheitsglas",security:3},
+    industrial:{name:"Industrie-Lichtband",width:3,price:2190,material:"glas",security:0}
+  };
+  const ZONE_TYPES={
+    office:{name:"Büro",color:"#87b7da",needs:["desk","chair","computer","light","network"],minArea:8},
+    meeting:{name:"Besprechung",color:"#83c9b5",needs:["table","chair","light"],minArea:8},
+    toilet:{name:"Sanitär",color:"#afa8df",needs:["toilet","sink","light","ventilation"],minArea:3},
+    server:{name:"Serverraum",color:"#e6ad7c",needs:["rack","ups","switch","hvac","access"],minArea:6},
+    warehouse:{name:"Lager",color:"#ccbc8d",needs:["shelf","light","exit"],minArea:8},
+    workshop:{name:"Werkstatt",color:"#d8a48d",needs:["machine","light","exit"],minArea:8},
+    kitchen:{name:"Teeküche",color:"#e6c18b",needs:["sink","light","ventilation"],minArea:4},
+    corridor:{name:"Flur / Fluchtweg",color:"#afc8c7",needs:["exit","emergencyLight"],minArea:2},
+    reception:{name:"Empfang",color:"#bbabd8",needs:["desk","chair","light"],minArea:6},
+    break:{name:"Pausenraum",color:"#b4d5a4",needs:["table","chair","light"],minArea:5}
+  };
+  const ASSETS=[];
+  const asset=(id,category,name,w,d,h,price,base,mount="floor",extra={})=>
+    ASSETS.push({id,category,name,w,d,h,price,base,mount,variants:["hell","dunkel"],...extra});
+  // Dimensions and prices are approximate gameplay catalogue values, not quotes.
+  asset("desk120","möbel","Schreibtisch kompakt 120",1.2,.7,.75,290,"desk");
+  asset("desk160","möbel","Schreibtisch 160",1.6,.8,.75,490,"desk");
+  asset("desk200","möbel","Schreibtisch 200",2,.9,.75,790,"desk");
+  asset("deskLift","möbel","Steh-Sitz-Schreibtisch",1.6,.8,.76,850,"desk", "floor",{variants:["weiß","eiche","anthrazit"]});
+  asset("deskCorner","möbel","Eckschreibtisch 180 × 160",1.8,1.6,.75,990,"desk","floor",{shape:"L"});
+  asset("deskExec","möbel","Chefschreibtisch Nussbaum",2.2,.95,.75,1490,"desk");
+  asset("chairBasic","möbel","Bürostuhl Standard",.65,.65,1.08,180,"chair");
+  asset("chairErgo","möbel","Ergonomischer Drehstuhl",.7,.7,1.25,590,"chair");
+  asset("chairConference","möbel","Konferenzstuhl",.56,.56,.92,240,"chair");
+  asset("chairVisitor","möbel","Besucherstuhl",.55,.56,.91,190,"chair");
+  asset("chairLounge","möbel","Loungesessel",.85,.83,.85,680,"chair");
+  asset("table4","möbel","Besprechungstisch 4 P.",1.6,.9,.75,650,"table");
+  asset("table8","möbel","Besprechungstisch 6–8 P.",2.4,1.2,.75,1390,"table");
+  asset("table12","möbel","Konferenztisch 10–12 P.",3.6,1.4,.75,2790,"table");
+  asset("tableRound","möbel","Runder Besprechungstisch",1.2,1.2,.75,620,"table");
+  asset("tableCafe","möbel","Bistrotisch",.8,.8,.75,220,"table");
+  asset("sofa2","möbel","Wartebereich Sofa 2er",1.6,.85,.85,920,"sofa");
+  asset("cabinet120","möbel","Aktenschrank 120",1.2,.45,1.95,430,"shelf");
+  asset("cabinetGlass","möbel","Vitrinenschrank",1.2,.45,1.95,690,"shelf");
+  asset("locker","möbel","Mitarbeiterspind",.8,.5,1.9,420,"shelf");
+  asset("shelfWarehouse","lager","Schwerlastregal 2,5 m",2.5,1,3,1450,"shelf");
+  asset("shelfIndustrial","lager","Palettenregal 3,5 m",3.5,1.2,4,2690,"shelf");
+  asset("pallet","lager","Euro-Palette",1.2,.8,.14,39,"pallet");
+  asset("crate","lager","Transportbox",.8,.6,.6,115,"pallet");
+  asset("forklift","lager","Elektrostapler",2.5,1.2,2.1,18500,"machine");
+  asset("workbench","industrie","Werkbank",2,.8,.92,870,"machine");
+  asset("machineCNC","industrie","CNC-Fräsmaschine",2.4,2.1,2.1,48900,"machine");
+  asset("machineLift","industrie","Hebebühne",3.6,2.5,2.3,6900,"machine");
+  asset("machinePress","industrie","Presse",1.3,1.2,2.1,12800,"machine");
+  asset("imac","it","All-in-One Computer 24 Zoll",.55,.23,.46,1850,"computer");
+  asset("imacPro","it","All-in-One Computer Pro",.6,.26,.48,2490,"computer");
+  asset("desktopPC","it","Desktop-PC mit Monitor",.72,.3,.5,1340,"computer");
+  asset("dualMonitor","it","Dual-Monitor-Arbeitsplatz",1.15,.32,.5,1990,"computer");
+  asset("laptop","it","Business-Notebook",.38,.28,.3,1190,"computer");
+  asset("docking","it","Dockingstation",.18,.12,.055,240,"computer");
+  asset("printerA4","it","Farblaser-Multifunktionsdrucker",.55,.6,.55,890,"printer");
+  asset("printerFloor","it","Standkopierer",.7,.7,1.1,4200,"printer");
+  asset("rack24","it","Serverschrank 24 HE",.6,.8,1.35,1150,"rack");
+  asset("rack42","it","Serverschrank 42 HE",.6,1.0,2.1,1950,"rack");
+  asset("rack48","it","Serverschrank 48 HE",.8,1.2,2.3,2990,"rack");
+  asset("server","it","Rack-Server 2 HE",.48,.7,.10,2900,"server");
+  asset("nas","it","NAS-Speicher",.32,.28,.22,1350,"server");
+  asset("switch24","it","Netzwerkswitch 24 Ports",.45,.3,.06,650,"switch");
+  asset("switch48","it","PoE-Switch 48 Ports",.48,.35,.07,1590,"switch");
+  asset("router","it","Business-Router",.34,.24,.075,490,"router");
+  asset("firewall","it","Business-Firewall",.48,.29,.07,1150,"firewall");
+  asset("ups","it","USV-Anlage",.48,.66,.5,1350,"ups");
+  asset("wlanCeiling","it","WLAN 6 Access Point",.22,.22,.065,285,"wifi","ceiling");
+  asset("wlanWall","it","WLAN-Wand-Access-Point",.16,.10,.19,230,"wifi","wall");
+  asset("wlanOutdoor","it","Outdoor-WLAN-Access-Point",.20,.10,.27,460,"wifi","wall");
+  asset("repeater","it","WLAN-Repeater",.12,.10,.18,98,"wifi","wall");
+  asset("networkSocket","it","RJ45-Netzwerkdose",.08,.04,.08,59,"socket","wall");
+  asset("powerSocket","technik","Doppelsteckdose",.08,.04,.08,85,"socket","wall");
+  asset("hvacWall","technik","Wand-Klimagerät",.86,.29,.31,2200,"hvac","wall");
+  asset("hvacCeiling","technik","Deckenkassette Klima",.6,.6,.22,3800,"hvac","ceiling");
+  asset("lightLED","technik","LED-Deckenpanel",.6,.6,.08,230,"light","ceiling");
+  asset("lightStrip","technik","Lichtband Industrie",1.5,.15,.12,410,"light","ceiling");
+  asset("ventilator","technik","Lüftungsgerät",.7,.55,.40,1800,"hvac","ceiling");
+  asset("toiletWall","sanitär","Wand-WC",.37,.59,.42,830,"toilet");
+  asset("toiletAccessible","sanitär","Barrierearmes WC",.7,.8,.45,1400,"toilet");
+  asset("sink","sanitär","Handwaschbecken",.6,.47,.82,490,"sink");
+  asset("sinkDouble","sanitär","Doppelwaschtisch",1.4,.48,.82,1260,"sink");
+  asset("shower","sanitär","Dusche",.9,.9,2.15,1150,"shower");
+  asset("kitchenUnit","sanitär","Teeküchenzeile",2.4,.65,.9,3200,"kitchen");
+  asset("dispenser","sanitär","Seifen- und Papier-Spender",.14,.12,.27,150,"dispenser","wall");
+  asset("dome","sicherheit","Dome-Kamera",.14,.14,.12,340,"camera","ceiling",{security:"cctv",range:16,fov:105,network:true});
+  asset("turret","sicherheit","Turret-Kamera",.15,.15,.13,360,"camera","wall",{security:"cctv",range:20,fov:98,network:true});
+  asset("bullet","sicherheit","Bullet-Kamera",.28,.13,.13,460,"camera","wall",{security:"cctv",range:35,fov:72,network:true});
+  asset("ptz","sicherheit","PTZ-Schwenkkamera",.28,.28,.32,1550,"camera","ceiling",{security:"cctv",range:70,fov:60,network:true});
+  asset("nvr","sicherheit","Netzwerk-Videorekorder",.48,.32,.09,980,"nvr",{},{});
+  asset("motion","sicherheit","Bewegungsmelder PIR",.11,.11,.14,145,"motion","wall");
+  asset("glassBreak","sicherheit","Glasbruchmelder",.09,.08,.08,195,"motion","wall");
+  asset("contact","sicherheit","Tür-/Fensterkontakt",.08,.025,.025,75,"contact","wall");
+  asset("alarmPanel","sicherheit","Einbruchmeldezentrale",.3,.15,.39,890,"alarm","wall");
+  asset("reader","sicherheit","RFID-Zutrittsleser",.1,.07,.18,320,"reader","wall");
+  asset("readerBio","sicherheit","Biometrischer Leser",.16,.12,.22,980,"reader","wall");
+  asset("intercom","sicherheit","Video-Türstation",.13,.1,.24,690,"reader","wall");
+  asset("smoke","brandschutz","Optischer Rauchmelder",.12,.12,.06,90,"alarm","ceiling");
+  asset("heat","brandschutz","Wärmemelder",.12,.12,.08,120,"alarm","ceiling");
+  asset("alarmButton","brandschutz","Handfeuermelder",.13,.05,.13,185,"alarm","wall");
+  asset("sprinkler","brandschutz","Sprinklerkopf",.1,.1,.12,115,"sprinkler","ceiling");
+  asset("extinguisher","brandschutz","Feuerlöscher 6 kg",.19,.18,.52,169,"extinguisher","wall");
+  asset("exitSign","brandschutz","Fluchtweg-Piktogramm",.35,.09,.16,210,"exitSign","wall");
+  asset("emergencyLight","brandschutz","Sicherheitsleuchte",.32,.13,.17,260,"emergencyLight","ceiling");
+  asset("firePanel","brandschutz","Brandmeldezentrale",.46,.16,.59,1950,"alarm","wall");
+  asset("plantTall","deko","Große Büropflanze",.55,.55,1.45,170,"plant");
+  asset("plantDesk","deko","Kleine Tischpflanze",.22,.22,.3,35,"plant");
+  asset("whiteboard","deko","Whiteboard",1.6,.08,.9,290,"whiteboard","wall");
+  asset("digitalSign","deko","Digitales Infoschild",.9,.09,.55,840,"display","wall");
+  asset("waterCooler","deko","Wasserspender",.36,.42,1.22,410,"dispenser");
+  const ASSET_INDEX=Object.fromEntries(ASSETS.map(x=>[x.id,x]));
   const APPLICANTS = [
     {name:"Rheintal Digital GmbH",industry:"IT & Software",kind:"office",employees:18,turnover:138000,health:88,desired:380,maxRent:6900},
     {name:"Hansa Versandlogistik",industry:"Logistik",kind:"warehouse",employees:28,turnover:310000,health:77,desired:640,maxRent:9800},
@@ -488,5 +615,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
