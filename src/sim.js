@@ -80,6 +80,7 @@
     const b2=makeBuilding(s,"warehouse",28,22,true);b2.name="Logistikzentrum West";
     const b3=makeBuilding(s,"cafe",12,22,true);b3.name="Parkcafé";
     const b4=makeBuilding(s,"service",24,12,true);b4.name="AM Betriebszentrale";
+    const b5=makeBuilding(s,"workshop",3,22,true);b5.name="Handwerkerhof Süd";
     makeCompany(s,{name:"Novatec Software GmbH",industry:"IT & Software",kind:"office",employees:35,turnover:220000,health:83},b1,6200);
     makeCompany(s,{name:"WestCargo Logistik GmbH",industry:"Logistik",kind:"warehouse",employees:42,turnover:390000,health:78},b2,8900);
     makeCompany(s,{name:"Kantinenbetrieb Berg & Sohn",industry:"Gastronomie",kind:"cafe",employees:11,turnover:69000,health:71},b3,2900);
@@ -89,7 +90,7 @@
     printer.condition=11;ticketFor(s,printer);dispenser.condition=9;ticketFor(s,dispenser);
     s.utilities=[{id:id(s,"UT"),x:6,y:7,type:"power",capacity:480},{id:id(s,"UT"),x:40,y:22,type:"fibre",capacity:1000},{id:id(s,"UT"),x:40,y:32,type:"water",capacity:1000}];
     s.trees=s.trees.filter(p=>{const [x,y]=p.split(",").map(Number);return !s.buildings.some(b=>x>=b.x-1&&y>=b.y-1&&x<b.x+b.w+1&&y<b.y+b.h+1)&&!s.parking.includes(p);});
-    addMessage(s,"Willkommen im Gewerbepark","Vier Bestandsgebäude sind vorhanden. Vermiete die freie Betriebszentrale oder entwickle ein weiteres Grundstück.");
+    addMessage(s,"Willkommen im Gewerbepark","Ein leerstehender Handwerkerhof wartet auf neue Mieter. Die Betriebszentrale betreibst du selbst.");
     addMessage(s,"Die ersten Mietinteressenten sind da","Öffne »Vermietung«, um Unternehmen anzusiedeln.");
     return s;
   }
@@ -198,7 +199,7 @@
     const upkeep=s.buildings.reduce((n,b)=>n+TYPES[b.type].monthly,0);
     const staff=s.staff.technicians*3500+s.staff.cleaners*2600+s.staff.security*3150;
     const power=s.buildings.reduce((n,b)=>n+(b.type==="warehouse"?75:b.type==="office"?35:19),0);
-    return {jobs,demand,parking:parkingCount(s),rent,upkeep,staff,power,occupancy:s.buildings.length?Math.round(100*s.buildings.filter(b=>b.tenantId).length/s.buildings.length):0,companies:s.companies.length};
+    return {jobs,demand,parking:parkingCount(s),rent,upkeep,staff,power,occupancy:s.buildings.filter(b=>b.type!=="service").length?Math.round(100*s.buildings.filter(b=>b.tenantId&&b.type!=="service").length/s.buildings.filter(b=>b.type!=="service").length):0,companies:s.companies.length};
   }
   function dispatch(s,ticketId){
     const t=s.tickets.find(x=>x.id===ticketId);if(!t||t.status!=="offen")return {ok:false,message:"Auftrag nicht offen"};
