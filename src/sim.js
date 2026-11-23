@@ -610,7 +610,7 @@
     const keys=Array.from({length:model.width},(_,i)=>axis+":"+(x+(axis==="H"?i:0))+":"+(y+(axis==="V"?i:0)));
     if(keys.some(k=>!f.walls[k]))return {ok:false,message:"Zusammenhängende Wandfläche für "+model.width+" m Öffnung fehlt"};
     if(keys.some(k=>f.doors[k]||f.windows&&f.windows[k]))return {ok:false,message:"Wandöffnung bereits belegt"};
-    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(validCell(f,xx,yy-1)===validCell(f,xx,yy)):(validCell(f,xx-1,yy),validCell(f,xx,yy));}))
+    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(validCell(f,xx,yy-1)===validCell(f,xx,yy)):(validCell(f,xx-1,yy)===validCell(f,xx,yy));}))
       return {ok:false,message:"Fenster benötigen eine Außenwand"};
     if(s.cash<model.price)return {ok:false,message:"Bauteil nicht finanzierbar"};
     const group=kind==="door"?f.doors:(f.windows||(f.windows={})),item={id:id(s,"OPN"),model:modelId,span:model.width,root:edge};
