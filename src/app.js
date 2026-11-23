@@ -199,10 +199,10 @@ function messagesPanel(){return '<div class="section-label">STANDORTCHRONIK</div
  +state.messages.map(m=>'<div class="feed-item"><div class="feed-mark '+(m.level==="warning"?"warning":"")+'"></div><div><strong>'+esc(m.title)+'</strong><p>'+esc(m.body)+'</p><time>'+esc(m.date)+'</time></div></div>').join("");
 }
 function helpPanel(){
- return '<div class="section-label">SO SPIELST DU INDUSTRIAL PARK</div><p class="panel-note">Du betreibst die AM Gewerbepark GmbH: Baue passende Flächen, gewinne Mieter und organisiere den laufenden Betrieb. Die Simulation funktioniert vollständig ohne Internet und verwendet lokale Spielstände.</p>'
- +'<ol class="help-list"><li><strong>Gebäude errichten:</strong> Im unteren Baumodus einen Gebäudetyp wählen und auf eine freie Parzelle klicken.</li><li><strong>Vermieten:</strong> Ein fertiges, leeres Gebäude auswählen. Unter Vermietung einem geeigneten Interessenten ein Angebot machen.</li><li><strong>Innenräume:</strong> Gebäude auswählen und »Innenausbau« öffnen. Wände mit zwei Klicks zeichnen, Türen auf Wandsegmenten setzen, Räume einfärben und Gegenstände platzieren.</li><li><strong>Gebäudebetrieb:</strong> Geräte verschleißen, melden Störungen und erzeugen technische Aufträge. Reparaturen brauchen Personal und Zeit.</li><li><strong>Finanzen:</strong> Am Monatsanfang werden Mieten und Betriebskosten abgerechnet. Neue Gebäude und Personal kosten Geld.</li><li><strong>Mobilität:</strong> Parkplätze schaffen und einen Shuttle finanzieren, um die Pendlernachfrage zu beeinflussen.</li><li><strong>Steuerung:</strong> Mausrad zoomt, Leertaste + Ziehen verschiebt die Karte; Rechtsklick zeigt ein Kontextmenü. Die Zeit lässt sich pausieren oder beschleunigen.</li></ol>'
+ return '<div class="section-label">SO SPIELST DU INDUSTRIAL PARK</div><p class="panel-note">Du startest auf einem vollständig leeren Grundstück. Erschließe dein Land, kaufe neue Flächen im Ankauf-Menü, wähle externe Bauunternehmen aus und baue später einen eigenen Baubetrieb auf. Alles läuft offline.</p>'
+ +'<ol class="help-list"><li><strong>Grundstücke:</strong> Du besitzt zuerst nur ein leeres Grundstück. Weitere Parzellen musst du im Menü Flächen kaufen.</li><li><strong>Bauunternehmen:</strong> Gebäude oder Straßen planen, Angebote vergleichen und Auftrag vergeben. Erst nach der simulierten Bauzeit wird die Fläche nutzbar.</li><li><strong>Eigenbetrieb:</strong> In Bauaufträge kannst du später eigene Mitarbeiter, Fahrzeuge und Maschinen finanzieren.</li><li><strong>Gebäude errichten:</strong> Im unteren Baumodus einen Gebäudetyp wählen und auf eine freie eigene Parzelle klicken.</li><li><strong>Vermieten:</strong> Ein fertiges, leeres Gebäude auswählen. Unter Vermietung einem geeigneten Interessenten ein Angebot machen.</li><li><strong>Innenräume:</strong> Gebäude auswählen und »Innenausbau« öffnen. Wände mit zwei Klicks zeichnen, Türen auf Wandsegmenten setzen, Räume einfärben und Gegenstände platzieren.</li><li><strong>Gebäudebetrieb:</strong> Geräte verschleißen, melden Störungen und erzeugen technische Aufträge. Reparaturen brauchen Personal und Zeit.</li><li><strong>Finanzen:</strong> Am Monatsanfang werden Mieten und Betriebskosten abgerechnet. Neue Gebäude und Personal kosten Geld.</li><li><strong>Mobilität:</strong> Parkplätze schaffen und einen Shuttle finanzieren, um die Pendlernachfrage zu beeinflussen.</li><li><strong>Steuerung:</strong> Mausrad zoomt, Leertaste + Ziehen verschiebt die Karte; Rechtsklick zeigt ein Kontextmenü. Die Zeit lässt sich pausieren oder beschleunigen.</li></ol>'
  +'<div class="section-label">SPIELSTAND</div>'+button("save","Jetzt speichern","","primary")+' '+button("reset","Neues Spiel beginnen","","danger")
- +'<div class="divider"></div><p class="fine">V1.0 ist ein spielbarer Grundausbau. Komplexe Feuerwehrtaktik, Live-Kameras, mehrstufige Bauabnahmen und volle Personeneinzelsimulation sind noch nicht implementiert.</p>';
+ +'<div class="divider"></div><p class="fine">Version 1.1 ist ein spielbarer Grundausbau. Komplexe Feuerwehrtaktik, Live-Kameras, mehrstufige Bauabnahmen und volle Personeneinzelsimulation sind noch nicht implementiert.</p>';
 }
 function landPanel(){
  const area=S.propertyArea(state),owned=state.parcels.filter(p=>p.owned).length;
@@ -377,6 +377,21 @@ function act(name,element){
  case "floor-view":setViewFloor(ui.selectedId);break;
  case "property-details":panelOpen("property");break;
  case "open-buildings":panelOpen("buildings");break;
+ case "open-land":panelOpen("land");break;
+ case "open-projects":panelOpen("projects");break;
+ case "buy-parcel":checkpoint();res=S.buyParcel(state,id);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Grundstück erworben.");refresh();break;
+ case "focus-parcel":focusParcel(id);break;
+ case "found-crew":checkpoint();res=S.startConstructionDept(state);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Eigene Bauabteilung gegründet.");refresh();break;
+ case "builders-up":case "builders-down":checkpoint();res=S.setBuilders(state,name==="builders-up"?1:-1);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Baupersonal angepasst.");refresh();break;
+ case "cancel-contract":closeConstructionOffer();break;
+ case "commission-project":{
+   if(!ui.pendingPlan){notify("Kein Bauvorhaben ausgewählt.",true);break;}
+   checkpoint();res=S.commission(state,ui.pendingPlan,element.dataset.contractor);
+   if(!res.ok)undoStack.pop();
+   choice(res.ok,res.message||(res.ok?res.project.contractorName+" beauftragt · "+res.project.totalDays+" Tage Bauzeit":"Vergabe nicht möglich"));
+   if(res.ok){ui.selectedId=res.building?res.building.id:null;closeConstructionOffer();}
+   refresh();break;
+ }
  case "rotate-build":ui.rotation=(ui.rotation+1)%2;refresh();notify("Gebäudeausrichtung: "+(ui.rotation?"90°":"0°"));break;
  case "undo":restoreHistory("undo");break;
  case "redo":restoreHistory("redo");break;
@@ -400,7 +415,7 @@ function act(name,element){
  case "loan":state.debt+=250000;state.cash+=250000;refresh();notify("250.000 € Darlehen ausgezahlt. Rückzahlung und Zinsen werden berücksichtigt.");break;
  case "repay":if(state.cash<50000||state.debt<50000)notify("Tilgung aktuell nicht möglich.",true);else{state.cash-=50000;state.debt-=50000;refresh();notify("50.000 € Darlehen getilgt.");}break;
  case "save":saveGame();break;
- case "reset":if(confirm("Neues Spiel beginnen? Der aktuelle lokale Spielstand wird überschrieben.")){undoStack.length=0;redoStack.length=0;state=S.create();ui.mode="world";ui.selectedId=null;ui.tool="select";ui.cam={cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0};closePanel();refresh();saveGame(true);notify("Neues Spiel begonnen.");}break;
+ case "reset":if(confirm("Neues Spiel beginnen? Der aktuelle lokale Spielstand wird überschrieben.")){undoStack.length=0;redoStack.length=0;state=S.create();ui.mode="world";ui.selectedId=null;ui.tool="select";ui.rotation=0;ui.cam={cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0};closeConstructionOffer();closePanel();refresh();saveGame(true);notify("Neues Spiel auf leerem Grundstück begonnen.");}break;
  case "context-inspect":ui.selectedId=menuTarget.buildingId;panelOpen("property");break;
  case "context-floor":setViewFloor(menuTarget.buildingId);break;
  case "context-leasing":panelOpen("leasing");break;
@@ -422,6 +437,7 @@ $("saveBtn").addEventListener("click",()=>saveGame());
 $("closePanel").addEventListener("click",closePanel);
 $("layersBtn").addEventListener("click",()=>{const list=["normal","traffic","vacancy","utilities"];ui.overlay=list[(list.indexOf(ui.overlay)+1)%list.length];refresh();});
 $("fitBtn").addEventListener("click",()=>{if(ui.mode==="floor"){ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;}else{ui.cam.zoom=.86;ui.cam.panX=0;ui.cam.panY=0;ui.cam.cx=23;ui.cam.cy=20;}refresh();});
+$("contractorModal").addEventListener("click",e=>{if(e.target===$("contractorModal"))closeConstructionOffer();});
 canvas.addEventListener("contextmenu",menuAt);
 canvas.addEventListener("pointerdown",e=>{
  if(e.button!==0&&e.button!==1)return;
@@ -497,7 +513,7 @@ canvas.addEventListener("wheel",e=>{
 },{passive:false});
 window.addEventListener("keydown",e=>{
  if(e.key===" "&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){spaceDown=true;e.preventDefault();}
- if(e.key==="Escape"){if(ui.mode==="floor")setViewWorld();else if(ui.tool!=="select")toolAction("select");else closePanel();}
+ if(e.key==="Escape"){if(ui.pendingPlan)closeConstructionOffer();else if(ui.mode==="floor")setViewWorld();else if(ui.tool!=="select")toolAction("select");else closePanel();}
  if(e.ctrlKey&&e.key.toLowerCase()==="s"){e.preventDefault();saveGame();}
  if(e.ctrlKey&&e.key.toLowerCase()==="z"){e.preventDefault();restoreHistory(e.shiftKey?"redo":"undo");}
  if(e.ctrlKey&&e.key.toLowerCase()==="y"){e.preventDefault();restoreHistory("redo");}
