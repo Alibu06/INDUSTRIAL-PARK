@@ -176,6 +176,18 @@
   asset("whiteboard","deko","Whiteboard",1.6,.08,.9,290,"whiteboard","wall");
   asset("digitalSign","deko","Digitales Infoschild",.9,.09,.55,840,"display","wall");
   asset("waterCooler","deko","Wasserspender",.36,.42,1.22,410,"dispenser");
+  const FURNITURE_SETS={
+    workstation:{name:"Kompletter iMac-Arbeitsplatz",category:"sets",pieces:[
+      {id:"desk160",x:0,y:0},{id:"chairErgo",x:.5,y:1},{id:"imac",x:.5,y:.25}
+    ]},
+    workstationPremium:{name:"Premium-Eckarbeitsplatz",category:"sets",pieces:[
+      {id:"deskCorner",x:0,y:0},{id:"chairErgo",x:1.1,y:1.75},{id:"imacPro",x:.4,y:.25}
+    ]},
+    meeting4:{name:"Besprechungsraum – 4 Personen",category:"sets",pieces:[
+      {id:"table4",x:.75,y:.75},{id:"chairConference",x:.95,y:0},{id:"chairConference",x:1.65,y:0},
+      {id:"chairConference",x:.95,y:1.9},{id:"chairConference",x:1.65,y:1.9}
+    ]}
+  };
   const ASSET_INDEX=Object.fromEntries(ASSETS.map(x=>[x.id,x]));
   const APPLICANTS = [
     {name:"Rheintal Digital GmbH",industry:"IT & Software",kind:"office",employees:18,turnover:138000,health:88,desired:380,maxRent:6900},
@@ -540,7 +552,8 @@
     return {ok:true};
   }
 
-  function validCell(f,x,y){return !!f&&x>=0&&y>=0&&x<f.cols&&y<f.rows&&(!f.mask||f.mask.includes(key(Math.floor(x),Math.floor(y))));}
+  const maskCache=new WeakMap();
+  function validCell(f,x,y){return !!f&&x>=0&&y>=0&&x<f.cols&&y<f.rows&&(!f.mask||(()=>{let set=maskCache.get(f.mask);if(!set){set=new Set(f.mask);maskCache.set(f.mask,set);}return set.has(key(Math.floor(x),Math.floor(y)));})());}
   function placeAsset(s,bid,level,assetId,x,y,rotation=0,variant){
     const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],def=ASSET_INDEX[assetId];
     if(!f||!def)return {ok:false,message:"Katalogobjekt nicht vorhanden"};
@@ -570,6 +583,16 @@
       s.devices.push(dev);it.deviceId=dev.id;
     }
     return {ok:true,item:it,cost:def.price};
+  }
+  function placeSet(s,bid,level,setId,x,y,rotation=0){
+    const group=FURNITURE_SETS[setId];if(!group)return {ok:false,message:"Einrichtungsvorlage unbekannt"};
+    const shifted=group.pieces.map(p=>({asset:p.id,x:Math.round((x+p.x)*4)/4,y:Math.round((y+p.y)*4)/4}));
+    // Validate the complete group on a simulation copy before charging or changing the real save.
+    const preview=clone(s);
+    for(const p of shifted){const result=placeAsset(preview,bid,level,p.asset,p.x,p.y,rotation);if(!result.ok)return result;}
+    let cost=0;
+    for(const p of shifted){const result=placeAsset(s,bid,level,p.asset,p.x,p.y,rotation);if(!result.ok)throw Error("Validated set could not be placed");cost+=result.cost;}
+    return {ok:true,count:shifted.length,cost};
   }
   function removeAsset(s,bid,level,itemId){
     const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],it=f&&f.items.find(it=>it.id===itemId);
@@ -736,5 +759,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,previewFootprint,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,FURNITURE_SETS,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,previewFootprint,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,placeSet,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
