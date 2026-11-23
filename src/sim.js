@@ -341,7 +341,7 @@
       building.construction=q.days;
       building.condition=q.quality;
       building.contractorId=q.id;
-      s.trees=s.trees.filter(k=>{const [x,y]=k.split(",").map(Number);return !(x>=building.x&&x<building.x+building.w&&y>=building.y&&y<building.y+building.h);});
+      s.trees=s.trees.filter(k=>{const [x,y]=k.split(",").map(Number);return building.shape?!building.shape.some(([dx,dy])=>building.x+dx===x&&building.y+dy===y):!(x>=building.x&&x<building.x+building.w&&y>=building.y&&y<building.y+building.h);});
     }
     const project={
       id:id(s,"BAU"),tool,buildingId:building?building.id:null,
@@ -374,7 +374,7 @@
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.publicRoads.includes(key(xx,yy)))return "Öffentliche Straße kann nicht überbaut werden";
     if(s.projects.some(p=>p.status==="bau"&&p.points.some(a=>a.x>=x&&a.x<x+w&&a.y>=y&&a.y<y+h)))return "Fläche bereits für Bauarbeiten reserviert";
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.roads.includes(key(xx,yy)))return "Straße liegt im Baufeld";
-    if(s.buildings.some(b=>x<b.x+b.w&&x+w>b.x&&y<b.y+b.h&&y+h>b.y))return "Gebäude steht im Baufeld";
+    if(s.buildings.some(b=>b.shape?b.shape.some(([dx,dy])=>x<b.x+dx+1&&x+w>b.x+dx&&y<b.y+dy+1&&y+h>b.y+dy):x<b.x+b.w&&x+w>b.x&&y<b.y+b.h))return "Gebäude steht im Baufeld";
     return "";
   }
   const SITE_COSTS={road:9000,parking:4400,tree:750};
@@ -470,7 +470,7 @@
     return {ok:true,count:valid.length,skipped:uniq.length-valid.length,cost};
   }
   function demolish(s,x,y){
-    const b=s.buildings.find(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
+    const b=s.buildings.find(b=>b.shape?b.shape.some(([dx,dy])=>b.x+dx===x&&b.y+dy===y):x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
     if(b){if(s.projects.some(p=>p.buildingId===b.id&&p.status==="bau"))return {ok:false,message:"Für laufende Bauvorhaben zuerst den Bauauftrag stornieren"};if(b.tenantId)return {ok:false,message:"Vermietetes Gebäude kann nicht abgerissen werden"};s.cash-=12000;s.buildings=s.buildings.filter(a=>a!==b);s.devices=s.devices.filter(d=>d.buildingId!==b.id);addMessage(s,"Rückbau abgeschlossen",b.name+" wurde zurückgebaut.");return {ok:true};}
     const p=key(x,y);for(const name of ["roads","parking","trees"]){if(s[name].includes(p)){s[name]=s[name].filter(k=>k!==p);return {ok:true};}}
     return {ok:false,message:"Hier befindet sich kein Bauobjekt"};
@@ -494,7 +494,7 @@
   function addFloor(s,bid){
     const b=s.buildings.find(x=>x.id===bid);if(!b)return {ok:false,message:"Gebäude nicht gefunden"};
     if(b.floors.length>=8)return {ok:false,message:"Maximal acht Etagen"};
-    const price=65000+b.w*b.h*2600;if(s.cash<price)return {ok:false,message:"Nicht genug Kapital"};
+    const price=65000+(b.shape?.length||b.w*b.h)*2600;if(s.cash<price)return {ok:false,message:"Nicht genug Kapital"};
     s.cash-=price;b.floors.push(floorFor(b,b.floors.length));b.levels=b.floors.length;
     addMessage(s,"Aufstockung beauftragt",b.name+" erhält eine zusätzliche Etage.");return {ok:true};
   }
@@ -610,7 +610,7 @@
     const keys=Array.from({length:model.width},(_,i)=>axis+":"+(x+(axis==="H"?i:0))+":"+(y+(axis==="V"?i:0)));
     if(keys.some(k=>!f.walls[k]))return {ok:false,message:"Zusammenhängende Wandfläche für "+model.width+" m Öffnung fehlt"};
     if(keys.some(k=>f.doors[k]||f.windows&&f.windows[k]))return {ok:false,message:"Wandöffnung bereits belegt"};
-    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(yy!==0&&yy!==f.rows):(xx!==0&&xx!==f.cols);}))
+    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(validCell(f,xx,yy-1)===validCell(f,xx,yy)):(validCell(f,xx-1,yy),validCell(f,xx,yy));}))
       return {ok:false,message:"Fenster benötigen eine Außenwand"};
     if(s.cash<model.price)return {ok:false,message:"Bauteil nicht finanzierbar"};
     const group=kind==="door"?f.doors:(f.windows||(f.windows={})),item={id:id(s,"OPN"),model:modelId,span:model.width,root:edge};
