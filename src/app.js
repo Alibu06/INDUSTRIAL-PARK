@@ -189,7 +189,7 @@ function refresh(){redrawHUD();updateToolbar();updateMapInfo();updatePanel();}
 function resizeSoon(){setTimeout(()=>renderer.resize(),30);}
 function toolAction(tool){ui.tool=tool;ui.wallStart=null;updateToolbar();updateMapInfo();}
 async function saveGame(silent){
- try{const data=JSON.stringify(state);localStorage.setItem("industrial-park-save-v1",data);if(window.IPBridge)await window.IPBridge.save(data);if(!silent)notify("Spielstand lokal gespeichert.");}
+ try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v1",data);if(!silent)notify("Spielstand lokal gespeichert.");}
  catch(e){if(!silent)notify("Speichern fehlgeschlagen: "+e.message,true);}
 }
 async function loadGame(){
