@@ -637,6 +637,26 @@ function factory(canvas){
      if(((pi.y>point.y)!==(pj.y>point.y))&&(point.x<(pj.x-pi.x)*(point.y-pi.y)/(pj.y-pi.y)+pi.x))yes=!yes;
    }return yes;
  }
+ function pickFloorWall(mx,my,u,b){
+   const f=b.floors[u.floorIndex]||b.floors[0],g=floorGeom(u,f);
+   const p={x:mx,y:my},hits=[];
+   for(const edge of Object.keys(f.walls)){
+     const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
+     const a=floorPoint(g,x,y),bb=floorPoint(g,x+(o==="H"?1:0),y+(o==="V"?1:0));
+     if(g.iso){
+       const low=(o==="H"&&y===f.rows)||(o==="V"&&x===f.cols);
+       const height=low?.42:((o==="H"&&y===0)||(o==="V"&&x===0))?1.9:1.5;
+       const at={x:a.x,y:a.y-height*g.size},bt={x:bb.x,y:bb.y-height*g.size};
+       if(insidePoly(p,[a,bb,bt,at]))hits.push({edge,depth:x+y});
+     }else{
+       const dx=bb.x-a.x,dy=bb.y-a.y,len=Math.hypot(dx,dy)||1;
+       const t=Math.max(0,Math.min(1,((mx-a.x)*dx+(my-a.y)*dy)/(len*len)));
+       if(Math.hypot(mx-(a.x+dx*t),my-(a.y+dy*t))<Math.max(8,g.size*.32))hits.push({edge,depth:x+y});
+     }
+   }
+   hits.sort((a,b)=>b.depth-a.depth);
+   return hits.length?hits[0].edge:null;
+ }
  function pickBuilding(px,py,u,s){
    const p={x:px,y:py},sorted=s.buildings.slice().sort((a,b)=>(b.x+b.y+b.w+b.h)-(a.x+a.y+a.w+a.h));
    for(const b of sorted){
@@ -648,7 +668,7 @@ function factory(canvas){
    return null;
  }
  function render(s,u,t){if(!cw||!ch)resize();c.setTransform(dpr,0,0,dpr,0,0);if(u.mode==="floor")floor(s,u);else world(s,u,t||0);}
- return {resize,render,hitWorld:(x,y,u)=>unproject(x,y,u),hitFloor:floorHit,pickBuilding,worldP,viewport:()=>({w:cw,h:ch})};
+ return {resize,render,hitWorld:(x,y,u)=>unproject(x,y,u),hitFloor:floorHit,pickFloorWall,pickBuilding,worldP,viewport:()=>({w:cw,h:ch})};
 }
 root.IPRender={create:factory};
 })(window);
