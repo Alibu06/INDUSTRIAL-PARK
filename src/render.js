@@ -340,8 +340,24 @@ function factory(canvas){
   }
   drawText(b.name+" · "+f.label,cw/2,25,14,"#3b5968",true);
  }
+ function insidePoly(point,poly){
+   let yes=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+     const pi=poly[i],pj=poly[j];
+     if(((pi.y>point.y)!==(pj.y>point.y))&&(point.x<(pj.x-pi.x)*(point.y-pi.y)/(pj.y-pi.y)+pi.x))yes=!yes;
+   }return yes;
+ }
+ function pickBuilding(px,py,u,s){
+   const p={x:px,y:py},sorted=s.buildings.slice().sort((a,b)=>(b.x+b.y+b.w+b.h)-(a.x+a.y+a.w+a.h));
+   for(const b of sorted){
+     const h=20+b.floors.length*30;
+     const a=worldP(b.x,b.y,0,u),e=worldP(b.x+b.w,b.y,0,u),d=worldP(b.x+b.w,b.y+b.h,0,u),f=worldP(b.x,b.y+b.h,0,u);
+     const at=worldP(b.x,b.y,h,u),et=worldP(b.x+b.w,b.y,h,u),dt=worldP(b.x+b.w,b.y+b.h,h,u),ft=worldP(b.x,b.y+b.h,h,u);
+     if(insidePoly(p,[at,et,dt,ft])||insidePoly(p,[ft,dt,d,f])||insidePoly(p,[dt,et,e,d]))return b;
+   }
+   return null;
+ }
  function render(s,u,t){if(!cw||!ch)resize();c.setTransform(dpr,0,0,dpr,0,0);if(u.mode==="floor")floor(s,u);else world(s,u,t||0);}
- return {resize,render,hitWorld:(x,y,u)=>unproject(x,y,u),hitFloor:floorHit,worldP,viewport:()=>({w:cw,h:ch})};
+ return {resize,render,hitWorld:(x,y,u)=>unproject(x,y,u),hitFloor:floorHit,pickBuilding,worldP,viewport:()=>({w:cw,h:ch})};
 }
 root.IPRender={create:factory};
 })(window);
