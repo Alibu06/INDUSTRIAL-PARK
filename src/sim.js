@@ -83,9 +83,10 @@
     makeCompany(s,{name:"Novatec Software GmbH",industry:"IT & Software",kind:"office",employees:35,turnover:220000,health:83},b1,6200);
     makeCompany(s,{name:"WestCargo Logistik GmbH",industry:"Logistik",kind:"warehouse",employees:42,turnover:390000,health:78},b2,8900);
     makeCompany(s,{name:"Kantinenbetrieb Berg & Sohn",industry:"Gastronomie",kind:"cafe",employees:11,turnover:69000,health:71},b3,2900);
-    device(s,b1,"hvac",9,2);device(s,b1,"printer",4,5);device(s,b1,"light",11,8);
+    device(s,b1,"hvac",9,2);const printer=device(s,b1,"printer",4,5);device(s,b1,"light",11,8);
     device(s,b1,"alarm",15,2);device(s,b2,"camera",3,3);device(s,b2,"machine",11,12);
-    device(s,b3,"dispenser",4,5);device(s,b4,"reader",2,2);
+    const dispenser=device(s,b3,"dispenser",4,5);device(s,b4,"reader",2,2);
+    printer.condition=11;ticketFor(s,printer);dispenser.condition=9;ticketFor(s,dispenser);
     s.utilities=[{id:id(s,"UT"),x:6,y:7,type:"power",capacity:480},{id:id(s,"UT"),x:40,y:22,type:"fibre",capacity:1000},{id:id(s,"UT"),x:40,y:32,type:"water",capacity:1000}];
     s.trees=s.trees.filter(p=>{const [x,y]=p.split(",").map(Number);return !s.buildings.some(b=>x>=b.x-1&&y>=b.y-1&&x<b.x+b.w+1&&y<b.y+b.h+1)&&!s.parking.includes(p);});
     addMessage(s,"Willkommen im Gewerbepark","Vier Bestandsgebäude sind vorhanden. Vermiete die freie Betriebszentrale oder entwickle ein weiteres Grundstück.");
@@ -179,6 +180,17 @@
     return {ok:true};
   }
   function parkingCount(s){return s.parking.length*2;}
+  function capacity(b){
+    if(!b)return 0;
+    let total=0;for(const f of b.floors){
+      const counts={};for(const type of Object.values(f.tiles))counts[type]=(counts[type]||0)+1;
+      if(b.type==="office"||b.type==="service")total+=(counts.office||0)/10+(counts.meeting||0)/38;
+      else if(b.type==="warehouse")total+=(counts.hall||0)/11;
+      else if(b.type==="workshop")total+=(counts.workshop||0)/8;
+      else if(b.type==="cafe")total+=(counts.kitchen||0)/10+(counts.break||0)/17;
+    }
+    return Math.max(0,Math.floor(total));
+  }
   function metrics(s){
     const jobs=s.companies.reduce((n,c)=>n+c.employees,0);
     const demand=Math.ceil(jobs*(s.bus?.38:.62));
@@ -190,8 +202,9 @@
   }
   function dispatch(s,ticketId){
     const t=s.tickets.find(x=>x.id===ticketId);if(!t||t.status!=="offen")return {ok:false,message:"Auftrag nicht offen"};
-    const busy=s.tickets.filter(x=>x.status==="bearbeitung").length;
-    if(busy>=s.staff.technicians)return {ok:false,message:"Keine freien Haustechniker"};
+    const group=t.category==="reinigung"?"cleaners":"technicians";
+    const busy=s.tickets.filter(x=>x.status==="bearbeitung"&&(x.category==="reinigung"?"cleaners":"technicians")===group).length;
+    if(busy>=s.staff[group])return {ok:false,message:group==="cleaners"?"Keine freien Reinigungskräfte":"Keine freien Haustechniker"};
     if(s.cash<t.cost)return {ok:false,message:"Nicht ausreichend Liquidität"};
     s.cash-=t.cost;t.status="bearbeitung";t.remaining=1+Math.ceil(t.cost/2400);
     addMessage(s,"Arbeitsauftrag disponiert",t.id+" wurde einem Techniker zugewiesen.");
@@ -201,7 +214,8 @@
     if(s.tickets.some(t=>t.deviceId===d.id&&t.status!=="erledigt"))return;
     const names={hvac:"Klimaanlage meldet Leistungsabfall",light:"Leuchte ausgefallen",printer:"Drucker benötigt Wartung",dispenser:"Materialspender leer",alarm:"Störung Brandmeldetechnik",camera:"Kamera ohne Verbindung",machine:"Produktionsmaschine gestört",reader:"Kartenleser ausgefallen",sink:"Wasserarmatur defekt",toilet:"Sanitäranlage gestört",sprinkler:"Sprinkleranlage prüfen"};
     d.state="defekt";
-    const t={id:id(s,"FM"),deviceId:d.id,buildingId:d.buildingId,status:"offen",created:s.clock.slice(0,10),description:names[d.type]||"Technische Anlage prüfen",cost:Math.max(120,Math.round(200+rand(s)*1400)),remaining:0};
+    const cleaning=d.type==="dispenser";
+    const t={id:id(s,"FM"),deviceId:d.id,buildingId:d.buildingId,category:cleaning?"reinigung":"technik",status:"offen",created:s.clock.slice(0,10),description:names[d.type]||"Technische Anlage prüfen",cost:cleaning?35:Math.max(120,Math.round(200+rand(s)*1400)),remaining:0};
     s.tickets.unshift(t);const b=s.buildings.find(x=>x.id===d.buildingId);
     addMessage(s,"Neue Störungsmeldung",t.description+" · "+(b?b.name:"Gebäude"),"warning");
   }
@@ -212,7 +226,7 @@
     }
     for(const d of s.devices){
       if(d.state!=="ok")continue;
-      d.uses++;d.condition-=.03+rand(s)*.065;
+      d.uses++;const wear={dispenser:1.45,printer:.45,light:.11,hvac:.13,toilet:.18,sink:.14,camera:.12,alarm:.06,sprinkler:.05,reader:.12,machine:.18};d.condition-=(wear[d.type]||.12)*(.7+rand(s)*.6);
       if(d.condition<18||rand(s)<.0009)ticketFor(s,d);
     }
     for(const t of s.tickets.filter(t=>t.status==="bearbeitung")){
@@ -233,8 +247,13 @@
       const op= c.turnover*.26;
       const profit=Math.round(sales-payroll-op-c.rent);
       c.cash+=profit;c.history.push({date:s.clock.slice(0,7),profit,employees:c.employees});c.history=c.history.slice(-24);
-      c.health=Math.max(10,Math.min(98,c.health+(profit>0?1:-3)+(m.demand>m.parking?-1:0)));
-      if(profit>c.turnover*.12&&rand(s)<.20){c.employees+=1+Math.floor(rand(s)*3);addMessage(s,"Unternehmen wächst",c.name+" hat neue Mitarbeiter eingestellt.");}
+      const property=s.buildings.find(b=>b.id===c.buildingId);
+      const maxStaff=capacity(property);
+      c.health=Math.max(10,Math.min(98,c.health+(profit>0?1:-3)+(m.demand>m.parking?-1:0)+(c.employees>maxStaff?-3:0)));
+      if(profit>c.turnover*.12&&rand(s)<.20){
+        if(c.employees>=maxStaff){addMessage(s,"Erweiterungsbedarf",c.name+" kann wegen seiner Flächenaufteilung nicht weiter einstellen. Kapazität: "+maxStaff+" Arbeitsplätze.","warning");}
+        else {c.employees=Math.min(maxStaff,c.employees+1+Math.floor(rand(s)*3));addMessage(s,"Unternehmen wächst",c.name+" hat neue Mitarbeiter eingestellt.");}
+      }
       if(profit<0&&rand(s)<.16){c.employees=Math.max(2,c.employees-2);addMessage(s,"Personalabbau",c.name+" reduziert seine Belegschaft.");}
       if(c.cash<0&&c.health<24){const b=s.buildings.find(x=>x.id===c.buildingId);if(b)b.tenantId=null;c.status="ausgezogen";addMessage(s,"Mietausfall",c.name+" kann den Mietvertrag nicht fortführen.","warning");}
       else{tenantRent+=c.rent;positive++;}
@@ -258,5 +277,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,create,place,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,create,place,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
