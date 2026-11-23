@@ -76,7 +76,6 @@ function factory(canvas){
   }
   if(u.cam.zoom>.52){
     const p=worldP(b.x+b.w/2,b.y+b.h/2,h+24,u);
-    roofLabel(b.x+b.w/2,b.y+b.h/2,u,"",""); // suppressed by new roof-label below
     // The nameplate lives above the roof rather than covering the building.
     c.fillStyle="rgba(17,33,44,.91)";const txt=b.name,tw=Math.min(210,txt.length*6.6+22);
     c.beginPath();c.roundRect(p.x-tw/2,p.y-12*u.cam.zoom,tw,26*u.cam.zoom,7);c.fill();
@@ -132,6 +131,27 @@ function factory(canvas){
     vehicle(worldP(x,y,0,u),u,colors[i%colors.length],dir,i%7===0?1.7:1);
   }
   pedestrians(s,u,t);
+  if(u.overlay==="vacancy"){
+    for(const b of s.buildings){
+      const p=worldP(b.x+b.w/2,b.y+b.h/2,30+b.floors.length*30,u);
+      const vacant=!b.tenantId&&b.construction===0;
+      c.fillStyle=vacant?"#ebad61":"#428e87";
+      c.strokeStyle="#fff";c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,10*u.cam.zoom,0,TAU);c.fill();c.stroke();
+      if(u.cam.zoom>.65)drawText(vacant?"FREI":"MIETE",p.x,p.y-15*u.cam.zoom,9*u.cam.zoom,"#2d4a55",true);
+    }
+  }
+  if(u.overlay==="utilities"){
+    for(const ut of s.utilities){
+      const p=worldP(ut.x,ut.y,0,u);
+      for(const b of s.buildings){
+        const q=worldP(b.x+b.w/2,b.y+b.h/2,0,u);
+        c.save();c.setLineDash([4,7]);line(c,p,q,"rgba(45,145,174,.34)",1.8*u.cam.zoom);c.restore();
+      }
+      c.fillStyle=ut.type==="power"?"#cba24a":ut.type==="fibre"?"#438ab5":"#64abc5";
+      c.strokeStyle="#e8f8fa";c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,9*u.cam.zoom,0,TAU);c.fill();c.stroke();
+      drawText(ut.type==="power"?"E":ut.type==="fibre"?"F":"W",p.x,p.y,9*u.cam.zoom,"#fff",true);
+    }
+  }
   if(u.hover&&u.tool!=="select"){
     const x=u.hover.x,y=u.hover.y;
     if(S.TYPES[u.tool]){
