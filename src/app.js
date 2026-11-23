@@ -7,7 +7,7 @@ let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,dra
 const undoStack=[],redoStack=[];
 function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
 function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,floorView:"iso",cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -29,7 +29,7 @@ function panelOpen(section){
  updatePanel();resizeSoon();
 }
 function closePanel(){$("panel").classList.add("hidden");ui.nav="world";document.querySelectorAll(".navbtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.nav==="world"));resizeSoon();}
-function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.tool="wall";ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
+function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.floorView="iso";ui.tool="wall";ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
 function setViewWorld(){ui.mode="world";ui.tool="select";ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
 function selectBuilding(b){ui.selectedId=b?b.id:null;refresh();}
 function redrawHUD(){
@@ -40,10 +40,10 @@ function redrawHUD(){
  $("alertDot").classList.toggle("on",state.tickets.some(t=>t.status==="offen"));
  document.querySelectorAll("[data-speed]").forEach(b=>b.classList.toggle("active",Number(b.dataset.speed)===ui.speed));
  $("viewTitle").textContent=ui.mode==="floor"?"GEBÄUDEEDITOR · "+(building(ui.selectedId)?.name||"ETAGE"):"GEWERBEPARK · KARTE";
- $("viewHint").textContent=ui.mode==="floor"?(building(ui.selectedId)?.floors[ui.floorIndex]?.label||"Innenraum"):"Isometrische Übersicht";
- $("layerName").textContent=({normal:"Normalansicht",traffic:"Verkehr & Parken",vacancy:"Immobilien",utilities:"Versorgung"})[ui.overlay];
- $("layersBtn").disabled=ui.mode==="floor";
- $("mapHint").textContent=ui.mode==="floor"?"Wände: Anfang / Ende · Räume: Ziehen · Türen: Wand anklicken · Strg+Z rückgängig · Esc: Außenansicht":"Bauen: klicken oder ziehen · R Gebäude drehen · Strg+Z rückgängig · Leertaste + Ziehen: Karte verschieben";
+ $("viewHint").textContent=ui.mode==="floor"?(building(ui.selectedId)?.floors[ui.floorIndex]?.label||"Innenraum")+" · "+(ui.floorView==="iso"?"2,5D":"Bauplan"):"Isometrische Übersicht";
+ $("layerName").textContent=ui.mode==="floor"?(ui.floorView==="iso"?"2D-Bauplan":"2,5D-Innenansicht"):({normal:"Normalansicht",traffic:"Verkehr & Parken",vacancy:"Immobilien",utilities:"Versorgung"})[ui.overlay];
+ $("layersBtn").disabled=false;
+ $("mapHint").textContent=ui.mode==="floor"?"2,5D / Bauplan umschaltbar · Wände: zwei Klicks · Farben: Wandfläche anklicken · Strg+Z rückgängig · Esc: Außenansicht":"Bauen: klicken oder ziehen · R Gebäude drehen · Strg+Z rückgängig · Leertaste + Ziehen: Karte verschieben";
 }
 const worldTools=[
  ["select","↖","Auswählen"],["office","▥","Büro"],["warehouse","▰","Halle"],["workshop","▤","Werkstatt"],["cafe","☕","Gastro"],
@@ -57,17 +57,21 @@ const floorTools=[
  ["item:printer","▧","Drucker"],["item:hvac","❄","Klima"],["item:light","✳","Leuchte"],
  ["item:toilet","◉","WC"],["item:dispenser","▢","Spender"],["item:camera","◈","Kamera"],
  ["item:alarm","●","Melder"],["item:sprinkler","❋","Sprinkler"],["item:reader","⊡","Leser"],
- ["item:shelf","▥","Regal"],["item:machine","⚙","Maschine"],["item:plant","♣","Pflanze"]
+ ["item:shelf","▥","Regal"],["item:machine","⚙","Maschine"],["item:plant","♣","Pflanze"],
+ ["finish:white","⬜","Weiß"],["finish:beige","▤","Beige"],["finish:navy","▣","Navy"],
+ ["finish:sage","◩","Salbei"],["finish:concrete","▥","Beton"],["finish:brick","▧","Klinker"],["finish:glass","◇","Glas"]
 ];
 function updateToolbar(){
  const list=ui.mode==="floor"?floorTools:worldTools;
  let markup='<button class="toolbtn" data-action="'+(ui.mode==="floor"?"world-view":"open-buildings")+'" title="'+(ui.mode==="floor"?"Zurück zum Park":"Objektverwaltung")+'"><span class="toolicon">'+(ui.mode==="floor"?"←":"▤")+'</span><small>'+(ui.mode==="floor"?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
- const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
+ const finishIndex=list.findIndex(v=>v[0].startsWith("finish:"));
+ const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,finishIndex],["WÄNDE GESTALTEN",finishIndex,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
  for(const group of groups){
    markup+='<span class="tool-category">'+group[0]+'</span>';
    markup+=list.slice(group[1],group[2]).map(v=>'<button title="'+esc(v[2])+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
  }
  if(ui.mode==="world")markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="rotate-build" title="Gebäude drehen (R)"><span class="toolicon">⟳</span><small>Drehen</small></button>';
+ else markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="floor-view-toggle" title="Innenansicht zwischen 2,5D und Bauplan umschalten"><span class="toolicon">'+(ui.floorView==="iso"?"▧":"◈")+'</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
  markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" title="Rückgängig (Strg+Z)" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" title="Wiederherstellen (Strg+Y)" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
  $("toolbar").innerHTML=markup;
 }
@@ -75,7 +79,7 @@ function updateToolStats(){
  const target=$("toolStats");if(!target)return;
  if(ui.mode==="floor"){
    const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
-   target.textContent=f?f.label+" · "+f.cols+" × "+f.rows+" m · "+Object.keys(f.walls).length+" Wandsegmente · "+f.items.length+" Objekte":"";
+   target.textContent=f?f.label+" · "+(ui.floorView==="iso"?"2,5D · ":"Bauplan · ")+f.cols+" × "+f.rows+" m · "+Object.keys(f.walls).length+" Wandsegmente · "+f.items.length+" Objekte":"";
    return;
  }
  const m=S.metrics(state),dragCells=ui.dragBuild;
@@ -399,8 +403,9 @@ function act(name,element){
  case "undo":restoreHistory("undo");break;
  case "redo":restoreHistory("redo");break;
  case "world-view":setViewWorld();closePanel();refresh();break;
+ case "floor-view-toggle":ui.floorView=ui.floorView==="iso"?"plan":"iso";ui.wallStart=null;refresh();notify(ui.floorView==="iso"?"2,5D-Innenansicht aktiv.":"Präziser 2D-Bauplan aktiv.");break;
  case "focus-building":if(building(ui.selectedId)){setViewWorld();focusBuilding(building(ui.selectedId));closePanel();refresh();}break;
- case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.mode="floor";ui.tool="wall";ui.wallStart=null;closePanel();refresh();break;
+ case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.floorView="iso";ui.mode="floor";ui.tool="wall";ui.wallStart=null;closePanel();refresh();break;
  case "add-floor":checkpoint();res=S.addFloor(state,ui.selectedId);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Etage ergänzt.");refresh();break;
  case "go-leasing":panelOpen("leasing");break;
  case "inspect-building":ui.selectedId=id;panelOpen("property");break;
@@ -438,7 +443,7 @@ document.addEventListener("click",e=>{
 });
 $("saveBtn").addEventListener("click",()=>saveGame());
 $("closePanel").addEventListener("click",closePanel);
-$("layersBtn").addEventListener("click",()=>{const list=["normal","traffic","vacancy","utilities"];ui.overlay=list[(list.indexOf(ui.overlay)+1)%list.length];refresh();});
+$("layersBtn").addEventListener("click",()=>{if(ui.mode==="floor"){ui.floorView=ui.floorView==="iso"?"plan":"iso";ui.wallStart=null;}else{const list=["normal","traffic","vacancy","utilities"];ui.overlay=list[(list.indexOf(ui.overlay)+1)%list.length];}refresh();});
 $("fitBtn").addEventListener("click",()=>{if(ui.mode==="floor"){ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;}else{ui.cam.zoom=.86;ui.cam.panX=0;ui.cam.panY=0;ui.cam.cx=23;ui.cam.cy=20;}refresh();});
 $("contractorModal").addEventListener("click",e=>{if(e.target===$("contractorModal"))closeConstructionOffer();});
 canvas.addEventListener("contextmenu",menuAt);
