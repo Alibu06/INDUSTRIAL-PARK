@@ -102,7 +102,8 @@ function updateMapInfo(){
   }else contents='<div class="info-card"><span class="kicker">DEIN STARTGRUNDSTÜCK</span><b>'+(state.buildings.length?"AM Gewerbepark":"Alles beginnt hier")+"</b><p>"+(state.buildings.length?"Wähle ein Gebäude oder plane die nächste Erweiterung.":"Noch keine Gebäude, Mieter oder internen Straßen. Wähle eine Straße oder einen Gebäudetyp, zeichne den Bauplan und vergleiche anschließend Angebote externer Bauunternehmen.")+'</p><button data-action="open-land">Grundstücke ansehen</button> <button data-action="open-projects">Bauaufträge</button></div>';
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
-  contents='<div class="info-card"><span class="kicker">FREIER INNENAUSBAU</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Felder":"")+" · "+(ui.wallStart?"Jetzt Endpunkt setzen.":"Raum, Wand, Tür oder Ausstattung wählen.")+'</p></div>';
+  const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
+  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
  }
  $("mapInfo").innerHTML=contents;
 }
@@ -339,17 +340,23 @@ function pathCells(tool,a,b){
 }
 function floorClick(e){
  const b=building(ui.selectedId);if(!b)return;const pos=getLocation(e),h=renderer.hitFloor(pos.x,pos.y,ui,b),f=b.floors[ui.floorIndex];
- if(!h.inside)return;
+ const wallSurface=renderer.pickFloorWall(pos.x,pos.y,ui,b);
+ if(!h.inside&&!wallSurface)return;
  if(ui.tool==="wall"){
   if(!ui.wallStart){ui.wallStart={x:h.nx,y:h.ny};notify("Endpunkt der Wand wählen.");}
   else{const a=ui.wallStart;ui.wallStart=null;let ex=h.nx,ey=h.ny;if(a.x!==ex&&a.y!==ey){if(Math.abs(a.x-ex)>Math.abs(a.y-ey))ey=a.y;else ex=a.x;}checkpoint();const res=S.setWall(state,b.id,ui.floorIndex,a.x,a.y,ex,ey,false);choice(res.ok,res.message||"Wand eingefügt.");}
- }else if(ui.tool==="door"){const edge=pickWall(f,h);if(f.walls[edge])checkpoint();const res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
+ }else if(ui.tool==="door"){const edge=wallSurface||pickWall(f,h);if(f.walls[edge])checkpoint();const res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
  else if(ui.tool==="erase"){
-  const i=f.items.find(i=>i.x===h.x&&i.y===h.y);checkpoint();
+  const i=h.inside?f.items.find(i=>i.x===h.x&&i.y===h.y):null;checkpoint();
   if(i){f.items=f.items.filter(j=>j!==i);if(i.deviceId)state.devices=state.devices.filter(d=>d.id!==i.deviceId);notify("Objekt entfernt.");}
-  else{const edge=pickWall(f,h);delete f.walls[edge];delete f.doors[edge];notify("Wandsegment entfernt.");}
- }else if(ui.tool.startsWith("room:")){checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
- else if(ui.tool.startsWith("item:")){checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
+  else{const edge=wallSurface||pickWall(f,h);delete f.walls[edge];delete f.doors[edge];if(f.wallFinishes)delete f.wallFinishes[edge];notify("Wandsegment entfernt.");}
+ }else if(ui.tool.startsWith("finish:")){
+  const edge=wallSurface||(h.inside?pickWall(f,h):null);
+  if(!edge||!f.walls[edge]){notify("Bitte eine vorhandene Wand anklicken.",true);return;}
+  checkpoint();const res=S.finishWall(state,b.id,ui.floorIndex,edge,ui.tool.slice(7));
+  if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Wandoberfläche geändert · "+euros(res.cost));
+ }else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
+ else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
  refresh();
 }
 function worldClick(e){
