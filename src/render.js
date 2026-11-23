@@ -504,13 +504,43 @@ function factory(canvas){
    const id=f.wallFinishes&&f.wallFinishes[edge]||"white";
    return S.WALL_FINISHES&&S.WALL_FINISHES[id]?S.WALL_FINISHES[id]:{color:"#e9e8df",name:"Warmweiß"};
  }
+ function floorSurface(f,x,y,roomType){
+   const chosen=f.floorFinishes&&f.floorFinishes[S.key(x,y)];
+   const mat=S.FLOOR_FINISHES&&S.FLOOR_FINISHES[chosen];
+   return mat||{color:roomColors[roomType]||"#eff0eb",pattern:"plain",name:"Standardboden"};
+ }
+ function floorDetail(g,x,y,pattern){
+   if(!g.iso||g.size<10||!pattern||pattern==="plain")return;
+   const z=g.size;
+   const w=(a,b,color,width=.6)=>line(c,floorPoint(g,a[0],a[1],.008),floorPoint(g,b[0],b[1],.008),color,width*Math.max(.7,z/19));
+   if(pattern==="tile"){
+     w([x+.5,y+.03],[x+.5,y+.97],"rgba(255,255,255,.58)");
+     w([x+.03,y+.5],[x+.97,y+.5],"rgba(108,131,131,.22)");
+   }else if(pattern==="wood"){
+     w([x+.08,y+.35],[x+.93,y+.35],"rgba(93,75,53,.28)",.7);
+     w([x+.08,y+.7],[x+.93,y+.7],"rgba(255,244,220,.36)");
+     w([x+.53,y+.03],[x+.53,y+.35],"rgba(103,83,63,.24)");
+     w([x+.22,y+.35],[x+.22,y+.7],"rgba(103,83,63,.24)");
+   }else if(pattern==="vinyl"){
+     w([x+.04,y+.49],[x+.94,y+.49],"rgba(255,255,255,.26)",.6);
+     w([x+.72,y+.08],[x+.72,y+.92],"rgba(73,95,93,.11)",.5);
+   }else if(pattern==="carpet"||pattern==="concrete"||pattern==="epoxy"){
+     for(let i=0;i<3;i++){
+       const fx=x+.18+hash(x*3+i,y*9,12)*.65,fy=y+.13+hash(x*5,y*3+i,8)*.72;
+       const p=floorPoint(g,fx,fy,.015);
+       ellipse(p.x,p.y,(pattern==="carpet"?.8:1.2)*z/20,.45*z/20,
+         pattern==="epoxy"?"rgba(238,250,251,.31)":pattern==="concrete"?"rgba(75,84,81,.17)":"rgba(74,84,89,.1)");
+     }
+   }
+ }
  function floorPlan(s,u,b,f,g){
    const z=g.size;
    c.save();c.shadowColor="rgba(23,50,60,.19)";c.shadowBlur=30;c.shadowOffsetY=12;
    c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);c.restore();
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
      const type=f.tiles[S.key(x,y)]||"office";
-     c.fillStyle=roomColors[type]||"#eff0ef";c.fillRect(g.x+x*z,g.y+y*z,z,z);
+     const surf=floorSurface(f,x,y,type);
+    c.fillStyle=surf.color;c.fillRect(g.x+x*z,g.y+y*z,z,z);
      c.strokeStyle="rgba(78,113,128,.09)";c.lineWidth=.6;c.strokeRect(g.x+x*z,g.y+y*z,z,z);
      if(z>23&&x%4===1&&y%4===1)drawText(S.FLOOR_TYPES[type]||"",g.x+(x+.5)*z,g.y+(y+.5)*z,8,"rgba(58,82,96,.25)");
    }
@@ -542,7 +572,7 @@ function factory(canvas){
    const near=(o==="H"&&y===f.rows)||(o==="V"&&x===f.cols);
    const height=near?.42:exterior?1.9:1.5;
    const mat=wallFinish(f,edge),glass=(f.wallFinishes&&f.wallFinishes[edge]==="glass");
-   const color=mat.color,door=!!f.doors[edge],z=g.size;
+   const color=mat.color,door=!!f.doors[edge],z=g.size,matId=(f.wallFinishes&&f.wallFinishes[edge])||"white";
    const drawPart=(start,end,lo,hi)=>{
      if(end<=start||hi<=lo)return;
      const aa=mix(a,b,start),bb=mix(a,b,end);
@@ -550,14 +580,30 @@ function factory(canvas){
      const at={x:aa.x,y:aa.y-hi*z},bt={x:bb.x,y:bb.y-hi*z};
      c.save();c.globalAlpha=glass?.47:1;
      polygon(c,[a0,b0,bt,at],color,highlight?"#39c3c5":"rgba(44,75,86,.35)",highlight?2:.65);
+     if(matId==="brick"||matId==="oakwall"||matId==="concrete"||matId==="glass"){
+       c.save();
+       c.strokeStyle=matId==="brick"?"rgba(255,236,208,.49)":matId==="oakwall"?"rgba(91,58,37,.35)":matId==="glass"?"rgba(232,252,255,.65)":"rgba(225,229,226,.27)";
+       c.lineWidth=matId==="glass"?1.2:.75;
+       if(matId==="brick"){
+         for(const part of [.28,.55,.82]){
+           const ta=mix(a0,at,part),tb=mix(b0,bt,part);line(c,ta,tb,"rgba(245,220,194,.47)",.8);
+         }
+         const centerA=mix(a0,b0,.5),centerB=mix(at,bt,.5);line(c,centerA,centerB,"rgba(80,56,46,.15)",.7);
+       }else if(matId==="oakwall"||matId==="glass"){
+         for(const part of [.33,.67])line(c,mix(a0,b0,part),mix(at,bt,part),matId==="glass"?"rgba(208,236,250,.80)":"rgba(94,61,37,.33)",1);
+       }else{
+         for(const part of [.42,.8])line(c,mix(a0,at,part),mix(b0,bt,part),"rgba(255,255,255,.11)",.6);
+       }
+       c.restore();
+     }
      polygon(c,[at,bt,{x:bt.x+z*.09,y:bt.y-z*.02},{x:at.x+z*.09,y:at.y-z*.02}],
        glass?"#bde7f0":"#f5f6f1","rgba(57,76,81,.15)",.45);
      c.restore();
      if(glass)line(c,at,bt,"rgba(52,101,128,.85)",1);
    };
-   if(door&&!near){
+   if(door){
      drawPart(0,.16,0,height);drawPart(.84,1,0,height);
-     drawPart(.16,.84,Math.min(height*.78,1.22),height);
+     if(!near)drawPart(.16,.84,Math.min(height*.78,1.22),height);
      const p=mix(a,b,.18),q=mix(a,b,.74);
      line(c,p,q,"#a67f54",Math.max(1.2,z*.065));
      // Swing arc indicates a real doorway instead of a painted rectangle.
@@ -597,8 +643,9 @@ function factory(canvas){
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
      const type=f.tiles[S.key(x,y)]||"office";
      const pts=[floorPoint(g,x,y),floorPoint(g,x+1,y),floorPoint(g,x+1,y+1),floorPoint(g,x,y+1)];
-     const color=roomColors[type]||"#eef0eb";
-     polygon(c,pts,color,"rgba(70,92,100,.07)",.4);
+     const surface=floorSurface(f,x,y,type);
+     polygon(c,pts,surface.color,"rgba(70,92,100,.10)",.5);
+     floorDetail(g,x,y,surface.pattern);
      if(x%4===0&&y%4===0&&g.size>12){
        line(c,floorPoint(g,x+.14,y+.5),floorPoint(g,x+.32,y+.5),"rgba(88,107,112,.13)",.45);
      }
@@ -607,7 +654,7 @@ function factory(canvas){
    const hovers=u.hoverFloor&&u.hoverFloor.inside?u.hoverFloor:null;
    for(const edge of Object.keys(f.walls)){
      const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
-     drawing.push({depth:o==="H"?x+.5+y:x+y+.5,wall:true,edge,draw:()=>drawIsoWall(f,g,edge,false)});
+     drawing.push({depth:o==="H"?x+.5+y:x+y+.5,wall:true,edge,draw:()=>drawIsoWall(f,g,edge,u.hoverWall===edge&&(u.tool==="door"||u.tool==="erase"||u.tool.startsWith("finish:")))});
    }
    for(const it of f.items){
      drawing.push({depth:it.x+it.y+1,wall:false,draw:()=>isoItem(it,g,s)});
