@@ -106,3 +106,26 @@
 .toolbtn:has(.finish-swatch){min-width:75px}
 .tool-category{letter-spacing:1.15px}
 @media(max-width:700px){.finish-swatch{width:23px;height:21px}.toolbtn:has(.finish-swatch){min-width:66px}}
+
+/* Construction Studio: full-height categorized searchable asset browser. */
+.catalog-topline{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;padding:0 0 4px}
+.catalog-topline label{font-size:11px;color:#577984;font-weight:750;letter-spacing:.5px}
+.catalog-search{width:100%;min-height:47px;background:#fff;border:1px solid #d0e0e5;border-radius:11px;padding:13px 16px;color:#244351;font:500 14px Inter,"Segoe UI",sans-serif;outline:none}
+.catalog-search:focus{border-color:#6da7ad;box-shadow:0 0 0 3px #84bec331}
+.catalog-filters{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:7px;margin:0 0 10px}
+.catalog-filter{border-radius:8px;border:1px solid #d5e2e6;background:#fff;color:#587584;padding:10px 13px;font:700 11px Inter,"Segoe UI",sans-serif;cursor:pointer;transition:background .15s}
+.catalog-filter:hover{background:#edf4f5}
+.catalog-filter.active{background:#1d5363;color:#f3fbfb;border-color:#1d5363}
+.catalog-card{min-height:179px;display:flex;flex-direction:column;gap:10px;border:1px solid #dce9ea;border-radius:14px;background:#fff;padding:18px;box-shadow:0 6px 21px rgba(35,69,80,.045)}
+.catalog-card:hover{border-color:#9dc4ca;box-shadow:0 9px 24px #305c6c16}
+.catalog-icon{height:43px;width:48px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#e2edee;color:#406e7b;font-size:26px}
+.catalog-icon.sicherheit{background:#e0eaf3;color:#426183}.catalog-icon.brandschutz{background:#f5e9df;color:#976244}
+.catalog-icon.it{background:#e7e6f3;color:#67638d}.catalog-icon.zonen{background:#e9e7f4;color:#746999}
+.catalog-card-body{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.catalog-card-body strong{color:#294451;font-size:14px;line-height:1.35}
+.catalog-card-body small{color:#728b94;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.catalog-card-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.catalog-card-actions .action{font-size:11px}
+.catalog-variants{display:flex;flex-wrap:wrap;gap:6px}
+.catalog-variants .action.small{padding:8px 10px;min-width:0}
+@media(max-width:900px){.catalog-card{min-height:0}.catalog-filters{gap:5px}.catalog-filter{padding:8px 10px}}

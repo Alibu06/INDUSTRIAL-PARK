@@ -7,7 +7,7 @@ let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,dra
 const undoStack=[],redoStack=[];
 function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
 function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,floorView:"iso",cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,hoverWall:null,wallStart:null,overlay:"normal",speed:1};
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,sketch:null,pendingPlan:null,floorView:"iso",catalogCategory:"alle",catalogSearch:"",assetVariant:null,zoneFilter:false,cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,hoverWall:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -29,8 +29,8 @@ function panelOpen(section){
  updatePanel();resizeSoon();
 }
 function closePanel(){$("panel").classList.add("hidden");ui.nav="world";document.querySelectorAll(".navbtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.nav==="world"));resizeSoon();}
-function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.floorView="iso";ui.tool="wall";ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
-function setViewWorld(){ui.mode="world";ui.tool="select";ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
+function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.floorView="iso";ui.tool="wall";ui.zoneFilter=false;ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
+function setViewWorld(){ui.mode="world";ui.tool="select";ui.sketch=null;ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
 function selectBuilding(b){ui.selectedId=b?b.id:null;refresh();}
 function redrawHUD(){
  const m=S.metrics(state),d=$("date"),t=$("time");
@@ -64,25 +64,63 @@ const floorTools=[
  ["floorfinish:carpet","▦","Teppich"],["floorfinish:oak","▤","Parkett"],["floorfinish:tile","▦","Fliesen"],
  ["floorfinish:concrete","▨","Betonboden"],["floorfinish:vinyl","▥","Vinyl"],["floorfinish:epoxy","▣","Epoxid"]
 ];
-function updateToolbar(){
- const list=ui.mode==="floor"?floorTools:worldTools;
- let markup='<button class="toolbtn" data-action="'+(ui.mode==="floor"?"world-view":"open-buildings")+'" title="'+(ui.mode==="floor"?"Zurück zum Park":"Objektverwaltung")+'"><span class="toolicon">'+(ui.mode==="floor"?"←":"▤")+'</span><small>'+(ui.mode==="floor"?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
- const finishIndex=list.findIndex(v=>v[0].startsWith("finish:"));
- const floorFinishIndex=list.findIndex(v=>v[0].startsWith("floorfinish:"));
- const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,finishIndex],["WÄNDE STREICHEN",finishIndex,floorFinishIndex],["BODENBELÄGE",floorFinishIndex,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
- for(const group of groups){
-   markup+='<span class="tool-category">'+group[0]+'</span>';
-   markup+=list.slice(group[1],group[2]).map(v=>{
-     const wall=v[0].startsWith("finish:")?S.WALL_FINISHES[v[0].slice(7)]:null;
-     const floor=v[0].startsWith("floorfinish:")?S.FLOOR_FINISHES[v[0].slice(12)]:null;
-     const mat=wall||floor;
-     const display=mat?'<span class="finish-swatch" style="background:'+mat.color+'"></span>':'<span class="toolicon">'+v[1]+'</span>';
-     return '<button title="'+esc(v[2]+(mat?" · "+euros(mat.cost)+" / "+(wall?"Wandsegment":"m²"):""))+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'">'+display+'<small>'+v[2]+'</small></button>';
-   }).join("");
+const catalogGroups=[
+ ["alle","Alle"],["räume","Raumnutzung"],["wände","Wandgestaltung"],["böden","Bodenbeläge"],["sets","Komplettsets"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
+ ["brandschutz","Brandschutz"],["technik","Gebäudetechnik"],["sanitär","Sanitär"],["lager","Lager"],
+ ["industrie","Industrie"],["deko","Dekoration"],["türen","Türen"],["fenster","Fenster"],["zonen","Zonen"]
+];
+function zonesPanel(){
+ const b=building(ui.selectedId);
+ if(!b)return '<p class="panel-note">Bitte zuerst ein Gebäude öffnen.</p>';
+ let html='<p class="panel-note">Die Zonennutzung bleibt im normalen Innenraum unsichtbar. Der Zonenfilter zeigt farbige Flächen und Beschriftungen.</p><div class="section-label">RAUMANFORDERUNGEN</div>';
+ for(let level=0;level<b.floors.length;level++){
+   const f=b.floors[level],types=[...new Set(Object.values(f.zones||{}))];
+   if(!types.length)html+=entry(f.label,"Noch keine Funktionszonen zugewiesen.",button("floor-view","Zone zeichnen","","primary"));
+   for(const id of types){const r=S.zoneReport(state,b.id,level,id);
+     html+=entry(esc(r.name),f.label+" · "+r.area+" m²",'<span class="pill '+(r.ready?"":"warning")+'">'+(r.ready?"Nutzbar":"Ausstattung fehlt")+'</span>'
+       +r.requirements.map(q=>line(q.name,(q.ok?"✓":"✕")+(q.ok?" erfüllt":" fehlt"))).join(""));
+   }
  }
- if(ui.mode==="world")markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="rotate-build" title="Gebäude drehen (R)"><span class="toolicon">⟳</span><small>Drehen</small></button>';
- else markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="floor-view-toggle" title="Innenansicht zwischen 2,5D und Bauplan umschalten"><span class="toolicon">'+(ui.floorView==="iso"?"▧":"◈")+'</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
- markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" title="Rückgängig (Strg+Z)" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" title="Wiederherstellen (Strg+Y)" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
+ return html+'<div class="section-label">ANZEIGE</div>'+button("zones-toggle",ui.zoneFilter?"Zonenfilter ausblenden":"Zonenfilter einblenden","","primary");
+}
+function catalogPanel(){
+ const category=ui.catalogCategory,query=ui.catalogSearch.trim().toLocaleLowerCase("de-DE");
+ const items=[
+  ...Object.entries(S.FLOOR_TYPES).map(([id,name])=>({id,category:"räume",name,tool:"room:"+id,
+    description:"Räume im Grundriss per Ziehen gestalten",price:0,variants:[],feature:"Raumnutzung"})),
+  ...Object.entries(S.WALL_FINISHES).map(([id,w])=>({id,category:"wände",name:w.name,tool:"finish:"+id,
+    description:"Wandsegment · "+euros(w.cost),price:w.cost,variants:[],feature:"Wandoberfläche"})),
+  ...Object.entries(S.FLOOR_FINISHES).map(([id,mat])=>({id,category:"böden",name:mat.name,tool:"floorfinish:"+id,
+    description:"1 m² · "+euros(mat.cost),price:mat.cost,variants:[],feature:"Bodenbelag"})),
+  ...Object.entries(S.FURNITURE_SETS).map(([id,a])=>({id,category:"sets",name:a.name,tool:"set:"+id,
+    description:a.pieces.length+" einzelne Möbel · "+euros(a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0)),
+    price:a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0),variants:[],feature:"Vorlage"})),
+  ...S.ASSETS.map(a=>({id:a.id,category:a.category,name:a.name,tool:"asset:"+a.id,
+    description:a.w.toLocaleString("de-DE")+" × "+a.d.toLocaleString("de-DE")+" m · "+a.mount+" · "+euros(a.price),price:a.price,
+    variants:a.variants,feature:a.security||a.base})),
+  ...Object.entries(S.DOOR_MODELS).map(([id,d])=>({id,category:"türen",name:d.name,tool:"door:"+id,description:d.width+" m Öffnung · "+d.material+" · "+euros(d.price),price:d.price,variants:[],feature:d.fire?"Feuerwiderstand "+d.fire+" Min.":"Bauteil"})),
+  ...Object.entries(S.WINDOW_MODELS).map(([id,d])=>({id,category:"fenster",name:d.name,tool:"window:"+id,description:d.width+" m Öffnung · "+d.material+" · "+euros(d.price),price:d.price,variants:[],feature:"Außenwand"})),
+  ...Object.entries(S.ZONE_TYPES).map(([id,z])=>({id,category:"zonen",name:z.name,tool:"zone:"+id,description:"Anforderungen: "+z.needs.join(", ")+" · min. "+z.minArea+" m²",price:0,variants:[],feature:"Funktionszone"}))
+ ];
+ const visible=items.filter(a=>(category==="alle"||a.category===category)&&(!query||[a.id,a.name,a.description,a.category,a.feature].join(" ").toLocaleLowerCase("de-DE").includes(query)));
+ return '<div class="catalog-topline"><label for="catalogSearch">Im Baukatalog suchen</label><input id="catalogSearch" class="catalog-search" autocomplete="off" placeholder="iMac, Dome, T30, Glaswand, Access Point ..." value="'+esc(ui.catalogSearch)+'"/></div>'
+ +'<div class="catalog-filters">'+catalogGroups.map(([id,name])=>'<button class="catalog-filter '+(category===id?"active":"")+'" data-action="catalog-filter" data-id="'+id+'">'+esc(name)+'</button>').join("")+'</div>'
+ +'<p class="panel-note">'+visible.length+' von '+items.length+' Bauobjekten und Zonenvorlagen · Preise und Maße sind Spielkatalogwerte. Einrichtungsobjekte rasten auf 25-cm-Schritten ein.</p>'
+ +(visible.length?visible.map(a=>'<article class="catalog-card"><div class="catalog-icon '+a.category+'">'+(a.category==="türen"?"▯":a.category==="fenster"?"▧":a.category==="sicherheit"?"◉":a.category==="brandschutz"?"♧":a.category==="it"?"▣":"▤")+'</div><div class="catalog-card-body"><strong>'+esc(a.name)+'</strong><small>'+esc(a.description)+'</small><small>'+esc(a.category.toUpperCase())+' · '+esc(a.feature)+'</small></div><div class="catalog-card-actions">'
+ +(a.variants.length?'<div class="catalog-variants">'+a.variants.map(v=>button("catalog-select",esc(v),'data-tool="'+esc(a.tool)+'" data-variant="'+esc(v)+'"',"small")).join("")+'</div>':button("catalog-select",a.price?euros(a.price):"Zone wählen",'data-tool="'+esc(a.tool)+'"',"primary"))+'</div></article>').join(""):'<div class="empty-state"><h3>Keine passenden Bauobjekte</h3><p>Entferne einen Filter oder suche nach einer anderen Bezeichnung.</p></div>');
+}
+function updateToolbar(){
+ const inFloor=ui.mode==="floor";
+ const list=inFloor?[["wall","┃","Wände"],["door","◫","Standardtür"],["erase","⌫","Rückbau"],["catalog","▦","Baukatalog"],["zone-overlay","◈","Zonenfilter"]]:worldTools;
+ let markup='<button class="toolbtn" data-action="'+(inFloor?"world-view":"open-buildings")+'"><span class="toolicon">←</span><small>'+(inFloor?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
+ markup+=list.map(v=>'<button class="toolbtn'+(ui.tool===v[0]?" active":"")+(v[0]==="zone-overlay"&&ui.zoneFilter?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
+ if(inFloor){
+   markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="open-catalog"><span class="toolicon">⊞</span><small>Alle Objekte</small></button><button class="toolbtn" data-action="open-zones"><span class="toolicon">▤</span><small>Raumprüfung</small></button>';
+   markup+='<button class="toolbtn" data-action="floor-view-toggle"><span class="toolicon">◈</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
+ }else{
+   markup+='<button class="toolbtn" data-action="cancel-sketch" '+(!ui.sketch?"disabled":"")+'><span class="toolicon">⊗</span><small>Skizze löschen</small></button>';
+ }
+ markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
  $("toolbar").innerHTML=markup;
 }
 function updateToolStats(){
@@ -93,6 +131,7 @@ function updateToolStats(){
    return;
  }
  const m=S.metrics(state),dragCells=ui.dragBuild;
+ if(ui.sketch&&S.TYPES[ui.tool]){target.textContent="Bauentwurf · "+ui.sketch.cells.length*16+" m² · Ziehen: erweitern · Umschalt+Ziehen: entfernen";return;}
  if(dragCells&&dragCells.length){
    const cost=dragCells.filter(p=>S.preview(state,ui.tool,p.x,p.y).ok).length*({road:9000,parking:4400,tree:750}[ui.tool]||0);
    target.textContent="Bauplanung · "+dragCells.length+" Felder · Basis "+euros(cost)+" · Danach Unternehmer auswählen";
@@ -101,9 +140,13 @@ function updateToolStats(){
 function updateMapInfo(){
  let contents="";
  if(ui.mode==="world"){
-  if(ui.selectedId&&building(ui.selectedId)){
+  if(ui.tool==="select"&&ui.selectedId&&building(ui.selectedId)){
    const b=building(ui.selectedId),c=company(b.tenantId);
    contents='<div class="info-card"><span class="kicker">OBJEKT AUSGEWÄHLT · '+esc(b.id)+'</span><b>'+esc(b.name)+'</b><p>'+esc(c?c.name:"Noch kein Mieter")+' · '+(b.w*4*b.h*4*b.levels)+' m² · '+esc(b.floors.length)+" Etage(n)"+'</p><button data-action="floor-view">Innenausbau →</button> <button data-action="property-details">Objektdaten</button></div>';
+  }else if(S.TYPES[ui.tool]){
+   const sketch=ui.sketch&&ui.sketch.tool===ui.tool?ui.sketch:null;
+   const p=sketch?S.previewFootprint(state,ui.tool,sketch.cells):null;
+   contents='<div class="info-card"><span class="kicker">FREIER GEBÄUDEGRUNDRISS</span><b>'+esc(S.TYPES[ui.tool].name)+'</b><p>'+(sketch?(sketch.cells.length*16).toLocaleString("de-DE")+' m² · '+sketch.cells.length+' Baufelder · '+euros(p.cost||0):'Erste Fläche auf der Karte aufziehen')+'</p><p>Ziehen: ergänzen · Umschalt+Ziehen: entfernen · L- und U-Formen möglich.</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+esc(p.message)+'</div>':'')+'<div class="buttons">'+(sketch?button("review-footprint","Angebote einholen","","primary")+button("cancel-sketch","Verwerfen"):'')+'</div></div>';
   }else if(ui.tool!=="select"){
    const tool=worldTools.find(t=>t[0]===ui.tool);
    let cost=S.TYPES[ui.tool]?S.TYPES[ui.tool].cost:({road:9000,parking:4400,tree:750})[ui.tool];
@@ -112,9 +155,13 @@ function updateMapInfo(){
   }else contents='<div class="info-card"><span class="kicker">DEIN STARTGRUNDSTÜCK</span><b>'+(state.buildings.length?"AM Gewerbepark":"Alles beginnt hier")+"</b><p>"+(state.buildings.length?"Wähle ein Gebäude oder plane die nächste Erweiterung.":"Noch keine Gebäude, Mieter oder internen Straßen. Wähle eine Straße oder einen Gebäudetyp, zeichne den Bauplan und vergleiche anschließend Angebote externer Bauunternehmen.")+'</p><button data-action="open-land">Grundstücke ansehen</button> <button data-action="open-projects">Bauaufträge</button></div>';
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
-  const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
+  const selectedAsset=ui.tool.startsWith("asset:")?S.ASSET_INDEX[ui.tool.slice(6)]:null;
+   const selectedSet=ui.tool.startsWith("set:")?S.FURNITURE_SETS[ui.tool.slice(4)]:null;
+   const selectedDoor=ui.tool.startsWith("door:")?S.DOOR_MODELS[ui.tool.slice(5)]:ui.tool.startsWith("window:")?S.WINDOW_MODELS[ui.tool.slice(7)]:null;
+   const selectedZone=ui.tool.startsWith("zone:")?S.ZONE_TYPES[ui.tool.slice(5)]:null;
+   const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
   const floorFinish=ui.tool.startsWith("floorfinish:")?S.FLOOR_FINISHES[ui.tool.slice(12)]:null;
-  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
+  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":selectedAsset?selectedAsset.name+" · "+selectedAsset.w+" × "+selectedAsset.d+" m · "+euros(selectedAsset.price)+" · R drehen":selectedSet?selectedSet.name+" · "+selectedSet.pieces.length+" Einzelteile · R drehen":selectedDoor?selectedDoor.name+" · Wand anklicken · "+euros(selectedDoor.price):selectedZone?"Zone zeichnen: "+selectedZone.name+" · Anforderungen prüfen":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
  }
  $("mapInfo").innerHTML=contents;
 }
@@ -274,7 +321,7 @@ function projectsPanel(){
 function openConstructionOffer(plan){
  const tool=plan.tool,isBuilding=!!S.TYPES[tool];
  if(isBuilding){
-   const p=S.preview(state,tool,plan.x,plan.y,plan.rotation||0);
+   const p=plan.cells?S.previewFootprint(state,tool,plan.cells):S.preview(state,tool,plan.x,plan.y,plan.rotation||0);
    if(!p.ok){notify(p.message,true);return;}
  }else{
    const points=plan.points||[],unique=new Set();
@@ -284,10 +331,10 @@ function openConstructionOffer(plan){
  }
  ui.pendingPlan=plan;
  const count=isBuilding?1:plan.points.length;
- const quote=S.getQuotes(state,tool,count),name=isBuilding?S.TYPES[tool].name:tool==="road"?"Straßenbau":tool==="parking"?"Parkplatzbau":"Begrünung";
+ const quote=S.getQuotes(state,tool,count,isBuilding&&plan.cells?plan.cells.length:0),name=isBuilding?S.TYPES[tool].name:tool==="road"?"Straßenbau":tool==="parking"?"Parkplatzbau":"Begrünung";
  $("contractorTitle").textContent=name+" beauftragen";
  $("contractorSummary").textContent=isBuilding?
- "Gebäude "+S.TYPES[tool].w*4+" × "+S.TYPES[tool].h*4+" Meter · Mehrere Angebote für Bauzeit, Preis und Ausführungsqualität":
+ (plan.cells?(plan.cells.length*16)+" m² frei gezeichneter Grundriss · ":"Gebäude "+S.TYPES[tool].w*4+" × "+S.TYPES[tool].h*4+" Meter · ")+"Mehrere Angebote für Bauzeit, Preis und Ausführungsqualität":
  count+" Felder · "+(count*16).toLocaleString("de-DE")+" m² · Bauarbeiten werden erst nach Fertigstellung sichtbar";
  $("contractorOffers").innerHTML=quote.map(q=>
  '<div class="contractor-offer'+(!q.available?" disabled":"")+'"><div><h3>'+esc(q.name)+'</h3><p>'+esc(q.description)+'</p>'
@@ -305,12 +352,12 @@ function focusParcel(id){
 }
 function updatePanel(){
  const panel=$("panel");if(panel.classList.contains("hidden"))return;
- const sections={property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
+ const sections={catalog:["Baukatalog · Planen & Ausstatten",catalogPanel],zones:["Funktionszonen & Anforderungen",zonesPanel],property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
  const section=sections[ui.nav]||sections.buildings;$("panelTitle").textContent=section[0];$("panelBody").innerHTML=section[1]();
 }
 function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats();updatePanel();}
 function resizeSoon(){setTimeout(()=>renderer.resize(),30);}
-function toolAction(tool){ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
+function toolAction(tool){if(tool==="catalog"){panelOpen("catalog");return;}if(tool==="zone-overlay"){ui.zoneFilter=!ui.zoneFilter;refresh();return;}if(S.TYPES[tool]&&ui.sketch&&ui.sketch.tool!==tool)ui.sketch=null;ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
 async function saveGame(silent){
  try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v2",data);if(!silent)notify("Spielstand lokal gespeichert.");}
  catch(e){if(!silent)notify("Speichern fehlgeschlagen: "+e.message,true);}
@@ -330,6 +377,20 @@ function pickWall(f,h){
  const v=S.wallKey(Math.round(h.fx),Math.floor(h.fy),"V"),ho=S.wallKey(Math.floor(h.fx),Math.round(h.fy),"H");
  if(vr<hr)return f.walls[v]?v:ho;
  return f.walls[ho]?ho:v;
+}
+function sketchRect(a,b){
+ const cells=[];
+ for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++)
+  for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++)cells.push({x,y});
+ return cells.slice(0,240);
+}
+function applySketch(tool,cells,remove=false){
+ const original=ui.sketch&&ui.sketch.tool===tool?ui.sketch.cells:[];
+ const map=new Map(original.map(p=>[p.x+","+p.y,p]));
+ for(const p of cells){const k=p.x+","+p.y;if(remove)map.delete(k);else map.set(k,p);}
+ ui.sketch={tool,cells:[...map.values()].slice(0,180)};
+ const result=S.previewFootprint(state,tool,ui.sketch.cells);
+ notify(ui.sketch.cells.length+" Baufelder · "+ui.sketch.cells.length*16+" m² · "+(result.ok?"Bauentwurf bereit":result.message),!result.ok);refresh();
 }
 function pathCells(tool,a,b){
  const out=[],seen=new Set();
@@ -356,11 +417,17 @@ function floorClick(e){
  if(ui.tool==="wall"){
   if(!ui.wallStart){ui.wallStart={x:h.nx,y:h.ny};notify("Endpunkt der Wand wählen.");}
   else{const a=ui.wallStart;ui.wallStart=null;let ex=h.nx,ey=h.ny;if(a.x!==ex&&a.y!==ey){if(Math.abs(a.x-ex)>Math.abs(a.y-ey))ey=a.y;else ex=a.x;}checkpoint();const res=S.setWall(state,b.id,ui.floorIndex,a.x,a.y,ex,ey,false);choice(res.ok,res.message||"Wand eingefügt.");}
- }else if(ui.tool==="door"){const edge=wallSurface||pickWall(f,h);if(f.walls[edge])checkpoint();const res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
+ }else if(ui.tool==="door"||ui.tool.startsWith("door:")||ui.tool.startsWith("window:")){
+  const edge=wallSurface||(h.inside?pickWall(f,h):null),windowTool=ui.tool.startsWith("window:");
+  if(!edge||!f.walls[edge]){notify("Bitte die Wand direkt anklicken.",true);return;}
+  checkpoint();const model=ui.tool.includes(":")?ui.tool.split(":")[1]:"standard";
+  const res=S.installOpening(state,b.id,ui.floorIndex,edge,windowTool?"window":"door",model);
+  if(!res.ok)undoStack.pop();choice(res.ok,res.message||((windowTool?"Fenster":"Tür")+" eingebaut · "+euros(res.cost)));
+ }
  else if(ui.tool==="erase"){
-  const i=h.inside?f.items.find(i=>i.x===h.x&&i.y===h.y):null;checkpoint();
-  if(i){f.items=f.items.filter(j=>j!==i);if(i.deviceId)state.devices=state.devices.filter(d=>d.id!==i.deviceId);notify("Objekt entfernt.");}
-  else{const edge=wallSurface||pickWall(f,h);delete f.walls[edge];delete f.doors[edge];if(f.wallFinishes)delete f.wallFinishes[edge];notify("Wandsegment entfernt.");}
+  const i=h.inside?f.items.slice().reverse().find(it=>h.fx>=it.x&&h.fx<it.x+(it.w||1)&&h.fy>=it.y&&h.fy<it.y+(it.d||1)):null;checkpoint();
+  if(i){S.removeAsset(state,b.id,ui.floorIndex,i.id);notify("Objekt entfernt / verkauft.");}
+  else{const edge=wallSurface||(h.inside?pickWall(f,h):null);if(!edge){undoStack.pop();notify("Keine Wand ausgewählt.",true);return;}const op=S.removeOpening(state,b.id,ui.floorIndex,edge);if(op.ok){notify("Tür oder Fenster entfernt.");}else{delete f.walls[edge];delete f.doors[edge];if(f.windows)delete f.windows[edge];if(f.wallFinishes)delete f.wallFinishes[edge];notify("Wandsegment entfernt.");}}
  }else if(ui.tool.startsWith("finish:")){
   const edge=wallSurface||(h.inside?pickWall(f,h):null);
   if(!edge||!f.walls[edge]){notify("Bitte eine vorhandene Wand anklicken.",true);return;}
@@ -368,7 +435,17 @@ function floorClick(e){
   if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Wandoberfläche geändert · "+euros(res.cost));
  }else if(ui.tool.startsWith("floorfinish:")){if(!h.inside)return;checkpoint();const res=S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12));if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Bodenbelag verlegt · "+euros(res.cost));}
  else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
- else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
+ else if(ui.tool.startsWith("set:")){
+   if(!h.inside)return;
+   checkpoint();const res=S.placeSet(state,b.id,ui.floorIndex,ui.tool.slice(4),Math.round(h.fx*4)/4,Math.round(h.fy*4)/4,ui.rotation);
+   if(!res.ok)undoStack.pop();choice(res.ok,res.message||res.count+" Objekte als Set platziert · "+euros(res.cost));
+ }else if(ui.tool.startsWith("asset:")){
+   const def=S.ASSET_INDEX[ui.tool.slice(6)];
+   if(!def){notify("Katalogobjekt fehlt.",true);return;}
+   const px=Math.max(0,Math.round(h.fx*4)/4),py=Math.max(0,Math.round(h.fy*4)/4);
+   checkpoint();const r=S.placeAsset(state,b.id,ui.floorIndex,def.id,px,py,ui.rotation,ui.assetVariant);
+   if(!r.ok)undoStack.pop();choice(r.ok,r.message||def.name+" platziert · "+euros(r.cost));
+ }else if(ui.tool.startsWith("item:")){if(!h.inside)return;checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
  refresh();
 }
 function worldClick(e){
@@ -399,6 +476,16 @@ function act(name,element){
  let res;
  switch(name){
  case "floor-view":setViewFloor(ui.selectedId);break;
+ case "open-catalog":panelOpen("catalog");break;
+ case "open-zones":panelOpen("zones");break;
+ case "catalog-filter":ui.catalogCategory=id;updatePanel();break;
+ case "catalog-select":ui.tool=element.dataset.tool;ui.assetVariant=element.dataset.variant||null;if(ui.tool.startsWith("zone:"))ui.zoneFilter=true;closePanel();refresh();notify("Ausgewählt: "+(S.ASSET_INDEX[ui.tool.slice(6)]?.name||ui.tool)+". Auf der Etage platzieren.");break;
+ case "cancel-sketch":ui.sketch=null;ui.dragBuild=null;refresh();notify("Bauentwurf verworfen.");break;
+ case "review-footprint":{
+   if(!ui.sketch||ui.sketch.cells.length<2){notify("Ziehe zunächst mindestens zwei Baufelder auf.",true);break;}
+   openConstructionOffer({tool:ui.sketch.tool,cells:ui.sketch.cells});break;
+ }
+ case "zones-toggle":ui.zoneFilter=!ui.zoneFilter;refresh();break;
  case "property-details":panelOpen("property");break;
  case "open-buildings":panelOpen("buildings");break;
  case "open-land":panelOpen("land");break;
@@ -415,7 +502,7 @@ function act(name,element){
    checkpoint();res=S.commission(state,ui.pendingPlan,element.dataset.contractor);
    if(!res.ok)undoStack.pop();
    choice(res.ok,res.message||(res.ok?res.project.contractorName+" beauftragt · "+res.project.totalDays+" Tage Bauzeit":"Vergabe nicht möglich"));
-   if(res.ok){ui.selectedId=res.building?res.building.id:null;closeConstructionOffer();}
+   if(res.ok){ui.selectedId=res.building?res.building.id:null;ui.sketch=null;closeConstructionOffer();}
    refresh();break;
  }
  case "rotate-build":ui.rotation=(ui.rotation+1)%2;refresh();notify("Gebäudeausrichtung: "+(ui.rotation?"90°":"0°"));break;
@@ -460,6 +547,12 @@ document.addEventListener("click",e=>{
  const button=e.target.closest("[data-action]");if(button){act(button.dataset.action,button);$("contextMenu").classList.add("hidden");return;}
  if(!e.target.closest("#contextMenu"))$("contextMenu").classList.add("hidden");
 });
+document.addEventListener("input",e=>{
+ if(e.target&&e.target.id==="catalogSearch"){
+   ui.catalogSearch=e.target.value;updatePanel();
+   const input=$("catalogSearch");if(input&&input.focus){input.focus();if(input.setSelectionRange)input.setSelectionRange(ui.catalogSearch.length,ui.catalogSearch.length);}
+ }
+});
 $("saveBtn").addEventListener("click",()=>saveGame());
 $("closePanel").addEventListener("click",closePanel);
 $("layersBtn").addEventListener("click",()=>{if(ui.mode==="floor"){ui.floorView=ui.floorView==="iso"?"plan":"iso";ui.wallStart=null;}else{const list=["normal","traffic","vacancy","utilities"];ui.overlay=list[(list.indexOf(ui.overlay)+1)%list.length];}refresh();});
@@ -472,15 +565,19 @@ canvas.addEventListener("pointerdown",e=>{
  const p=getLocation(e);
  if(e.button===1||(e.button===0&&spaceDown)){
    drag={mode:"pan",x:e.clientX,y:e.clientY,moved:false};
+ }else if(ui.mode==="world"&&S.TYPES[ui.tool]){
+   const h=renderer.hitWorld(p.x,p.y,ui);
+   drag={mode:"sketch",start:h,end:h,remove:e.shiftKey===true,x:e.clientX,y:e.clientY,moved:false};
+   ui.dragBuild=sketchRect(h,h);
  }else if(ui.mode==="world"&&["road","parking","tree"].includes(ui.tool)){
    const h=renderer.hitWorld(p.x,p.y,ui);
    drag={mode:"build",start:h,end:h,x:e.clientX,y:e.clientY,moved:false};
    ui.dragBuild=pathCells(ui.tool,h,h);updateToolStats();
- }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("floorfinish:"))){
+ }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("zone:")||ui.tool.startsWith("floorfinish:"))){
    drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false,changed:0,lastError:""};
    checkpoint();
    const b=building(ui.selectedId),h=b&&renderer.hitFloor(p.x,p.y,ui,b);
-   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
+   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):ui.tool.startsWith("zone:")?S.paintZone(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
  }else{
    drag={mode:"click",x:e.clientX,y:e.clientY,moved:false};
  }
@@ -498,6 +595,9 @@ canvas.addEventListener("pointermove",e=>{
      if(ui.mode==="floor"){ui.cam.floorX+=dx;ui.cam.floorY+=dy;}
      else{ui.cam.panX+=dx;ui.cam.panY+=dy;}
      drag.x=e.clientX;drag.y=e.clientY;
+   }else if(drag.mode==="sketch"){
+     const h=renderer.hitWorld(p.x,p.y,ui);
+     drag.end=h;drag.moved=true;ui.dragBuild=sketchRect(drag.start,h);updateToolStats();
    }else if(drag.mode==="build"){
      const h=renderer.hitWorld(p.x,p.y,ui);
      if(h.x!==drag.end.x||h.y!==drag.end.y){
@@ -508,7 +608,7 @@ canvas.addEventListener("pointermove",e=>{
    }else if(drag.mode==="paint"){
      const h=ui.hoverFloor,b=building(ui.selectedId);
      if(h&&h.inside&&b&&!drag.seen.has(h.x+","+h.y)){
-       const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
+       const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):ui.tool.startsWith("zone:")?S.paintZone(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
        if(res.ok)drag.changed++;else drag.lastError=res.message;
        drag.seen.add(h.x+","+h.y);drag.moved=true;
      }
@@ -526,6 +626,9 @@ canvas.addEventListener("pointermove",e=>{
 canvas.addEventListener("pointerup",e=>{
  const held=drag;drag=null;pressed=false;
  if(!held||e.button!==0){ui.dragBuild=null;return;}
+ if(held.mode==="sketch"){
+   const cells=ui.dragBuild||sketchRect(held.start,held.end);ui.dragBuild=null;applySketch(ui.tool,cells,held.remove);return;
+ }
  if(held.mode==="build"){
    const points=ui.dragBuild||pathCells(ui.tool,held.start,held.end);
    ui.dragBuild=null;
@@ -546,7 +649,7 @@ window.addEventListener("keydown",e=>{
  if(e.ctrlKey&&e.key.toLowerCase()==="s"){e.preventDefault();saveGame();}
  if(e.ctrlKey&&e.key.toLowerCase()==="z"){e.preventDefault();restoreHistory(e.shiftKey?"redo":"undo");}
  if(e.ctrlKey&&e.key.toLowerCase()==="y"){e.preventDefault();restoreHistory("redo");}
- if(e.key.toLowerCase()==="r"&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)&&ui.mode==="world"){ui.rotation=(ui.rotation+1)%2;refresh();notify("Ausrichtung: "+(ui.rotation?"90°":"0°"));}
+ if(e.key.toLowerCase()==="r"&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){ui.rotation=(ui.rotation+1)%2;refresh();notify("Ausrichtung: "+(ui.rotation?"90°":"0°"));}
  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&e.target.tagName!=="INPUT"){const amt=28;e.preventDefault();ui.cam.panX+=e.key==="ArrowLeft"?amt:e.key==="ArrowRight"?-amt:0;ui.cam.panY+=e.key==="ArrowUp"?amt:e.key==="ArrowDown"?-amt:0;}
 });
 window.addEventListener("keyup",e=>{if(e.key===" ")spaceDown=false;});

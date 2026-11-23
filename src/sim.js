@@ -50,6 +50,145 @@
     machine:{name:"Maschine",cost:8900,device:true},
     plant:{name:"Pflanze",cost:140}
   };
+  // All coordinates are metres. A 25 cm placement grid is used for interiors,
+  // independently from the coarse 4 m exterior plot grid.
+  const DOOR_MODELS={
+    standard:{name:"Standard-Innentür",width:1,price:490,material:"holz",fire:0,security:0},
+    glass:{name:"Ganzglastür",width:1,price:980,material:"glas",fire:0,security:0},
+    double:{name:"Doppelflügeltür",width:2,price:1540,material:"holz",fire:0,security:0},
+    sliding:{name:"Schiebetür",width:2,price:1650,material:"glas",fire:0,security:0},
+    fire30:{name:"Brandschutztür T30",width:1,price:1690,material:"stahl",fire:30,security:1},
+    fire90:{name:"Brandschutztür T90",width:1,price:2890,material:"stahl",fire:90,security:2},
+    secure:{name:"Sicherheitstür RC3",width:1,price:2650,material:"stahl",fire:0,security:3},
+    garage:{name:"Sektionaltor",width:3,price:5200,material:"metall",fire:0,security:1}
+  };
+  const WINDOW_MODELS={
+    standard:{name:"Isolierglasfenster",width:1,price:590,material:"glas",security:0},
+    double:{name:"Doppelfenster",width:2,price:1150,material:"glas",security:0},
+    panorama:{name:"Panoramafenster",width:3,price:2800,material:"glas",security:0},
+    fire:{name:"Brandschutzverglasung",width:1,price:1780,material:"brandschutzglas",security:1},
+    secure:{name:"Sicherheitsfenster RC3",width:1,price:1850,material:"sicherheitsglas",security:3},
+    industrial:{name:"Industrie-Lichtband",width:3,price:2190,material:"glas",security:0}
+  };
+  const ZONE_TYPES={
+    office:{name:"Büro",color:"#87b7da",needs:["desk","chair","computer","light","network"],minArea:8},
+    meeting:{name:"Besprechung",color:"#83c9b5",needs:["table","chair","light"],minArea:8},
+    toilet:{name:"Sanitär",color:"#afa8df",needs:["toilet","sink","light","ventilation"],minArea:3},
+    server:{name:"Serverraum",color:"#e6ad7c",needs:["rack","ups","switch","hvac","access"],minArea:6},
+    warehouse:{name:"Lager",color:"#ccbc8d",needs:["shelf","light","exit"],minArea:8},
+    workshop:{name:"Werkstatt",color:"#d8a48d",needs:["machine","light","exit"],minArea:8},
+    kitchen:{name:"Teeküche",color:"#e6c18b",needs:["sink","light","ventilation"],minArea:4},
+    corridor:{name:"Flur / Fluchtweg",color:"#afc8c7",needs:["exit","emergencyLight"],minArea:2},
+    reception:{name:"Empfang",color:"#bbabd8",needs:["desk","chair","light"],minArea:6},
+    break:{name:"Pausenraum",color:"#b4d5a4",needs:["table","chair","light"],minArea:5}
+  };
+  const ASSETS=[];
+  const asset=(id,category,name,w,d,h,price,base,mount="floor",extra={})=>
+    ASSETS.push({id,category,name,w,d,h,price,base,mount,variants:["hell","dunkel"],...extra});
+  // Dimensions and prices are approximate gameplay catalogue values, not quotes.
+  asset("desk120","möbel","Schreibtisch kompakt 120",1.2,.7,.75,290,"desk");
+  asset("desk160","möbel","Schreibtisch 160",1.6,.8,.75,490,"desk");
+  asset("desk200","möbel","Schreibtisch 200",2,.9,.75,790,"desk");
+  asset("deskLift","möbel","Steh-Sitz-Schreibtisch",1.6,.8,.76,850,"desk", "floor",{variants:["weiß","eiche","anthrazit"]});
+  asset("deskCorner","möbel","Eckschreibtisch 180 × 160",1.8,1.6,.75,990,"desk","floor",{shape:"L"});
+  asset("deskExec","möbel","Chefschreibtisch Nussbaum",2.2,.95,.75,1490,"desk");
+  asset("chairBasic","möbel","Bürostuhl Standard",.65,.65,1.08,180,"chair");
+  asset("chairErgo","möbel","Ergonomischer Drehstuhl",.7,.7,1.25,590,"chair");
+  asset("chairConference","möbel","Konferenzstuhl",.56,.56,.92,240,"chair");
+  asset("chairVisitor","möbel","Besucherstuhl",.55,.56,.91,190,"chair");
+  asset("chairLounge","möbel","Loungesessel",.85,.83,.85,680,"chair");
+  asset("table4","möbel","Besprechungstisch 4 P.",1.6,.9,.75,650,"table");
+  asset("table8","möbel","Besprechungstisch 6–8 P.",2.4,1.2,.75,1390,"table");
+  asset("table12","möbel","Konferenztisch 10–12 P.",3.6,1.4,.75,2790,"table");
+  asset("tableRound","möbel","Runder Besprechungstisch",1.2,1.2,.75,620,"table");
+  asset("tableCafe","möbel","Bistrotisch",.8,.8,.75,220,"table");
+  asset("sofa2","möbel","Wartebereich Sofa 2er",1.6,.85,.85,920,"sofa");
+  asset("cabinet120","möbel","Aktenschrank 120",1.2,.45,1.95,430,"shelf");
+  asset("cabinetGlass","möbel","Vitrinenschrank",1.2,.45,1.95,690,"shelf");
+  asset("locker","möbel","Mitarbeiterspind",.8,.5,1.9,420,"shelf");
+  asset("shelfWarehouse","lager","Schwerlastregal 2,5 m",2.5,1,3,1450,"shelf");
+  asset("shelfIndustrial","lager","Palettenregal 3,5 m",3.5,1.2,4,2690,"shelf");
+  asset("pallet","lager","Euro-Palette",1.2,.8,.14,39,"pallet");
+  asset("crate","lager","Transportbox",.8,.6,.6,115,"pallet");
+  asset("forklift","lager","Elektrostapler",2.5,1.2,2.1,18500,"machine");
+  asset("workbench","industrie","Werkbank",2,.8,.92,870,"machine");
+  asset("machineCNC","industrie","CNC-Fräsmaschine",2.4,2.1,2.1,48900,"machine");
+  asset("machineLift","industrie","Hebebühne",3.6,2.5,2.3,6900,"machine");
+  asset("machinePress","industrie","Presse",1.3,1.2,2.1,12800,"machine");
+  asset("imac","it","All-in-One Computer 24 Zoll",.55,.23,.46,1850,"computer");
+  asset("imacPro","it","All-in-One Computer Pro",.6,.26,.48,2490,"computer");
+  asset("desktopPC","it","Desktop-PC mit Monitor",.72,.3,.5,1340,"computer");
+  asset("dualMonitor","it","Dual-Monitor-Arbeitsplatz",1.15,.32,.5,1990,"computer");
+  asset("laptop","it","Business-Notebook",.38,.28,.3,1190,"computer");
+  asset("docking","it","Dockingstation",.18,.12,.055,240,"computer");
+  asset("printerA4","it","Farblaser-Multifunktionsdrucker",.55,.6,.55,890,"printer");
+  asset("printerFloor","it","Standkopierer",.7,.7,1.1,4200,"printer");
+  asset("rack24","it","Serverschrank 24 HE",.6,.8,1.35,1150,"rack");
+  asset("rack42","it","Serverschrank 42 HE",.6,1.0,2.1,1950,"rack");
+  asset("rack48","it","Serverschrank 48 HE",.8,1.2,2.3,2990,"rack");
+  asset("server","it","Rack-Server 2 HE",.48,.7,.10,2900,"server");
+  asset("nas","it","NAS-Speicher",.32,.28,.22,1350,"server");
+  asset("switch24","it","Netzwerkswitch 24 Ports",.45,.3,.06,650,"switch");
+  asset("switch48","it","PoE-Switch 48 Ports",.48,.35,.07,1590,"switch");
+  asset("router","it","Business-Router",.34,.24,.075,490,"router");
+  asset("firewall","it","Business-Firewall",.48,.29,.07,1150,"firewall");
+  asset("ups","it","USV-Anlage",.48,.66,.5,1350,"ups");
+  asset("wlanCeiling","it","WLAN 6 Access Point",.22,.22,.065,285,"wifi","ceiling");
+  asset("wlanWall","it","WLAN-Wand-Access-Point",.16,.10,.19,230,"wifi","wall");
+  asset("wlanOutdoor","it","Outdoor-WLAN-Access-Point",.20,.10,.27,460,"wifi","wall");
+  asset("repeater","it","WLAN-Repeater",.12,.10,.18,98,"wifi","wall");
+  asset("networkSocket","it","RJ45-Netzwerkdose",.08,.04,.08,59,"socket","wall");
+  asset("powerSocket","technik","Doppelsteckdose",.08,.04,.08,85,"socket","wall");
+  asset("hvacWall","technik","Wand-Klimagerät",.86,.29,.31,2200,"hvac","wall");
+  asset("hvacCeiling","technik","Deckenkassette Klima",.6,.6,.22,3800,"hvac","ceiling");
+  asset("lightLED","technik","LED-Deckenpanel",.6,.6,.08,230,"light","ceiling");
+  asset("lightStrip","technik","Lichtband Industrie",1.5,.15,.12,410,"light","ceiling");
+  asset("ventilator","technik","Lüftungsgerät",.7,.55,.40,1800,"hvac","ceiling");
+  asset("toiletWall","sanitär","Wand-WC",.37,.59,.42,830,"toilet");
+  asset("toiletAccessible","sanitär","Barrierearmes WC",.7,.8,.45,1400,"toilet");
+  asset("sink","sanitär","Handwaschbecken",.6,.47,.82,490,"sink");
+  asset("sinkDouble","sanitär","Doppelwaschtisch",1.4,.48,.82,1260,"sink");
+  asset("shower","sanitär","Dusche",.9,.9,2.15,1150,"shower");
+  asset("kitchenUnit","sanitär","Teeküchenzeile",2.4,.65,.9,3200,"kitchen");
+  asset("dispenser","sanitär","Seifen- und Papier-Spender",.14,.12,.27,150,"dispenser","wall");
+  asset("dome","sicherheit","Dome-Kamera",.14,.14,.12,340,"camera","ceiling",{security:"cctv",range:16,fov:105,network:true});
+  asset("turret","sicherheit","Turret-Kamera",.15,.15,.13,360,"camera","wall",{security:"cctv",range:20,fov:98,network:true});
+  asset("bullet","sicherheit","Bullet-Kamera",.28,.13,.13,460,"camera","wall",{security:"cctv",range:35,fov:72,network:true});
+  asset("ptz","sicherheit","PTZ-Schwenkkamera",.28,.28,.32,1550,"camera","ceiling",{security:"cctv",range:70,fov:60,network:true});
+  asset("nvr","sicherheit","Netzwerk-Videorekorder",.48,.32,.09,980,"nvr",{},{});
+  asset("motion","sicherheit","Bewegungsmelder PIR",.11,.11,.14,145,"motion","wall");
+  asset("glassBreak","sicherheit","Glasbruchmelder",.09,.08,.08,195,"motion","wall");
+  asset("contact","sicherheit","Tür-/Fensterkontakt",.08,.025,.025,75,"contact","wall");
+  asset("alarmPanel","sicherheit","Einbruchmeldezentrale",.3,.15,.39,890,"alarm","wall");
+  asset("reader","sicherheit","RFID-Zutrittsleser",.1,.07,.18,320,"reader","wall");
+  asset("readerBio","sicherheit","Biometrischer Leser",.16,.12,.22,980,"reader","wall");
+  asset("intercom","sicherheit","Video-Türstation",.13,.1,.24,690,"reader","wall");
+  asset("smoke","brandschutz","Optischer Rauchmelder",.12,.12,.06,90,"alarm","ceiling");
+  asset("heat","brandschutz","Wärmemelder",.12,.12,.08,120,"alarm","ceiling");
+  asset("alarmButton","brandschutz","Handfeuermelder",.13,.05,.13,185,"alarm","wall");
+  asset("sprinkler","brandschutz","Sprinklerkopf",.1,.1,.12,115,"sprinkler","ceiling");
+  asset("extinguisher","brandschutz","Feuerlöscher 6 kg",.19,.18,.52,169,"extinguisher","wall");
+  asset("exitSign","brandschutz","Fluchtweg-Piktogramm",.35,.09,.16,210,"exitSign","wall");
+  asset("emergencyLight","brandschutz","Sicherheitsleuchte",.32,.13,.17,260,"emergencyLight","ceiling");
+  asset("firePanel","brandschutz","Brandmeldezentrale",.46,.16,.59,1950,"alarm","wall");
+  asset("plantTall","deko","Große Büropflanze",.55,.55,1.45,170,"plant");
+  asset("plantDesk","deko","Kleine Tischpflanze",.22,.22,.3,35,"plant");
+  asset("whiteboard","deko","Whiteboard",1.6,.08,.9,290,"whiteboard","wall");
+  asset("digitalSign","deko","Digitales Infoschild",.9,.09,.55,840,"display","wall");
+  asset("waterCooler","deko","Wasserspender",.36,.42,1.22,410,"dispenser");
+  const FURNITURE_SETS={
+    workstation:{name:"Kompletter iMac-Arbeitsplatz",category:"sets",pieces:[
+      {id:"desk160",x:0,y:0},{id:"chairErgo",x:.5,y:1},{id:"imac",x:.5,y:.25}
+    ]},
+    workstationPremium:{name:"Premium-Eckarbeitsplatz",category:"sets",pieces:[
+      {id:"deskCorner",x:0,y:0},{id:"chairErgo",x:1.1,y:1.75},{id:"imacPro",x:.4,y:.25}
+    ]},
+    meeting4:{name:"Besprechungsraum – 4 Personen",category:"sets",pieces:[
+      {id:"table4",x:.75,y:.75},{id:"chairConference",x:.95,y:0},{id:"chairConference",x:1.65,y:0},
+      {id:"chairConference",x:.95,y:1.9},{id:"chairConference",x:1.65,y:1.9}
+    ]}
+  };
+  const ASSET_INDEX=Object.fromEntries(ASSETS.map(x=>[x.id,x]));
   const APPLICANTS = [
     {name:"Rheintal Digital GmbH",industry:"IT & Software",kind:"office",employees:18,turnover:138000,health:88,desired:380,maxRent:6900},
     {name:"Hansa Versandlogistik",industry:"Logistik",kind:"warehouse",employees:28,turnover:310000,health:77,desired:640,maxRent:9800},
@@ -65,15 +204,24 @@
   function addMessage(s,title,body,level){s.messages.unshift({id:id(s,"MSG"),date:s.clock.slice(0,10),title,body,level:level||"info"});s.messages=s.messages.slice(0,65);}
   function floorFor(b,idx){
     const kind=b.type==="warehouse"?"hall":b.type==="workshop"?"workshop":b.type==="cafe"?"kitchen":"office";
-    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},wallFinishes:{},floorFinishes:{},items:[]};
-    // Complete shell: each exterior wall is also an individually editable segment.
-    for(let x=0;x<f.cols;x++){f.walls["H:"+x+":0"]=1;f.walls["H:"+x+":"+f.rows]=1;}
-    for(let y=0;y<f.rows;y++){f.walls["V:0:"+y]=1;f.walls["V:"+f.cols+":"+y]=1;}
-    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)f.tiles[key(x,y)]=kind;
+    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},windows:{},zones:{},wallFinishes:{},floorFinishes:{},items:[],mask:null};
+    const built=new Set();
+    if(b.shape&&b.shape.length){
+      for(const [cx,cy] of b.shape)for(let yy=0;yy<4;yy++)for(let xx=0;xx<4;xx++)built.add(key(cx*4+xx,cy*4+yy));
+      f.mask=[...built];
+    }else for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)built.add(key(x,y));
+    for(const k of built){
+      const [x,y]=k.split(",").map(Number);f.tiles[k]=kind;
+      if(!built.has(key(x,y-1)))f.walls["H:"+x+":"+y]=1;
+      if(!built.has(key(x,y+1)))f.walls["H:"+x+":"+(y+1)]=1;
+      if(!built.has(key(x-1,y)))f.walls["V:"+x+":"+y]=1;
+      if(!built.has(key(x+1,y)))f.walls["V:"+(x+1)+":"+y]=1;
+    }
     return f;
   }
-  function makeBuilding(s,type,x,y,ready,rotation=0){
+  function makeBuilding(s,type,x,y,ready,rotation=0,custom=null){
     const t=TYPES[type],swapped=Math.abs(rotation)%2===1; const b={id:id(s,"B"),name:t.name+" "+String.fromCharCode(65+s.buildings.length),type,x,y,w:swapped?t.h:t.w,h:swapped?t.w:t.h,rotation:swapped?1:0,condition:88,construction:ready?0:t.days,levels:t.levels,floors:[],tenantId:null};
+    if(custom&&custom.length){const xs=custom.map(p=>p.x),ys=custom.map(p=>p.y);const minX=Math.min(...xs),minY=Math.min(...ys),maxX=Math.max(...xs),maxY=Math.max(...ys);b.x=minX;b.y=minY;b.w=maxX-minX+1;b.h=maxY-minY+1;b.shape=custom.map(p=>[p.x-minX,p.y-minY]);b.custom=true;}
     for(let i=0;i<t.levels;i++)b.floors.push(floorFor(b,i));
     s.buildings.push(b);return b;
   }
@@ -149,11 +297,11 @@
     if(count<5&&s.projects.some(p=>p.status==="bau"&&p.contractorId==="eigen"))return {ok:false,message:"Laufende Bauaufträge benötigen mindestens fünf Bauarbeiter"};
     s.constructionDept.workers=count;return {ok:true};
   }
-  function getQuotes(s,tool,quantity=1){
+  function getQuotes(s,tool,quantity=1,customSize=0){
     const count=Math.max(1,Math.floor(quantity));
-    const base=(TYPES[tool]?TYPES[tool].cost:(SITE_COSTS[tool]||0)*count);
+    const base=(TYPES[tool]?Math.round(TYPES[tool].cost*(customSize||TYPES[tool].w*TYPES[tool].h)/(TYPES[tool].w*TYPES[tool].h)):(SITE_COSTS[tool]||0)*count);
     if(!base)return [];
-    const baseDays=TYPES[tool]?TYPES[tool].days:Math.max(1,Math.ceil(count/5));
+    const baseDays=TYPES[tool]?Math.max(3,Math.ceil(TYPES[tool].days*Math.sqrt((customSize||TYPES[tool].w*TYPES[tool].h)/(TYPES[tool].w*TYPES[tool].h)))):Math.max(1,Math.ceil(count/5));
     const external=CONTRACTORS.map(c=>({...c,price:Math.round(base*c.factor),days:Math.max(1,Math.ceil(baseDays*c.speed)),own:false,available:true}));
     const own=s.constructionDept.active?[{
       id:"eigen",name:"Eigener Baubetrieb",description:"Eigenes Personal, Maschinen und Betriebshof",
@@ -167,7 +315,7 @@
     const tool=plan.tool,isBuilding=!!TYPES[tool],points=[];
     let check;
     if(isBuilding){
-      check=preview(s,tool,plan.x,plan.y,plan.rotation||0);
+      check=plan.cells&&plan.cells.length?previewFootprint(s,tool,plan.cells):preview(s,tool,plan.x,plan.y,plan.rotation||0);
       if(!check.ok)return {ok:false,message:check.message};
     }else{
       if(!(tool in SITE_COSTS))return {ok:false,message:"Unbekannter Baubereich"};
@@ -182,18 +330,18 @@
         if(!check.ok)return {ok:false,message:"Bauzug nicht möglich bei "+p.x+"/"+p.y+": "+check.message};
       }
     }
-    const q=getQuotes(s,tool,isBuilding?1:points.length).find(x=>x.id===contractorId);
+    const q=getQuotes(s,tool,isBuilding?1:points.length,isBuilding&&plan.cells?check.cells.length:0).find(x=>x.id===contractorId);
     if(!q)return {ok:false,message:"Bitte einen vorhandenen Bauunternehmer auswählen"};
     if(!q.available)return {ok:false,message:"Eigene Baukolonne derzeit nicht verfügbar"};
     if(s.cash<q.price)return {ok:false,message:"Finanzierung reicht für dieses Angebot nicht aus"};
     s.cash-=q.price;
     let building=null;
     if(isBuilding){
-      building=makeBuilding(s,tool,check.x,check.y,false,plan.rotation||0);
+      building=makeBuilding(s,tool,check.x,check.y,false,plan.rotation||0,plan.cells?check.cells:null);
       building.construction=q.days;
       building.condition=q.quality;
       building.contractorId=q.id;
-      s.trees=s.trees.filter(k=>{const [x,y]=k.split(",").map(Number);return !(x>=building.x&&x<building.x+building.w&&y>=building.y&&y<building.y+building.h);});
+      s.trees=s.trees.filter(k=>{const [x,y]=k.split(",").map(Number);return building.shape?!building.shape.some(([dx,dy])=>building.x+dx===x&&building.y+dy===y):!(x>=building.x&&x<building.x+building.w&&y>=building.y&&y<building.y+building.h);});
     }
     const project={
       id:id(s,"BAU"),tool,buildingId:building?building.id:null,
@@ -226,7 +374,7 @@
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.publicRoads.includes(key(xx,yy)))return "Öffentliche Straße kann nicht überbaut werden";
     if(s.projects.some(p=>p.status==="bau"&&p.points.some(a=>a.x>=x&&a.x<x+w&&a.y>=y&&a.y<y+h)))return "Fläche bereits für Bauarbeiten reserviert";
     for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(s.roads.includes(key(xx,yy)))return "Straße liegt im Baufeld";
-    if(s.buildings.some(b=>x<b.x+b.w&&x+w>b.x&&y<b.y+b.h&&y+h>b.y))return "Gebäude steht im Baufeld";
+    if(s.buildings.some(b=>b.shape?b.shape.some(([dx,dy])=>x<b.x+dx+1&&x+w>b.x+dx&&y<b.y+dy+1&&y+h>b.y+dy):x<b.x+b.w&&x+w>b.x&&y<b.y+b.h))return "Gebäude steht im Baufeld";
     return "";
   }
   const SITE_COSTS={road:9000,parking:4400,tree:750};
@@ -256,6 +404,40 @@
       (road||park||tree?"Fläche ist bereits belegt":"");
     return {ok:!err&&s.cash>=SITE_COSTS[tool],x,y,w:1,h:1,cost:SITE_COSTS[tool],
       message:err|| (s.cash<Math.round(SITE_COSTS[tool]*.94)?"Zu wenig Kapital":"Baufeld frei")};
+  }
+  function previewFootprint(s,tool,cells){
+    if(!TYPES[tool])return {ok:false,message:"Gebäudetyp nicht bekannt"};
+    const unique=new Map();
+    for(const p of cells||[]){
+      const x=Math.floor(p.x),y=Math.floor(p.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y))return {ok:false,message:"Baupunkt nicht gültig"};
+      unique.set(key(x,y),{x,y});
+    }
+    const shape=[...unique.values()];
+    if(shape.length<2)return {ok:false,message:"Mindestens zwei Baufelder (32 m²) zeichnen"};
+    if(shape.length>180)return {ok:false,message:"Maximal 2.880 m² je Bauprojekt"};
+    const set=new Set(unique.keys()),visited=new Set([key(shape[0].x,shape[0].y)]),queue=[shape[0]];
+    for(let i=0;i<queue.length;i++){
+      const p=queue[i];for(const [dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+        const k=key(p.x+dx,p.y+dy);
+        if(set.has(k)&&!visited.has(k)){visited.add(k);queue.push({x:p.x+dx,y:p.y+dy});}
+      }
+    }
+    if(visited.size!==shape.length)return {ok:false,message:"Baufläche muss zusammenhängend sein"};
+    for(const p of shape){
+      if(!isOwned(s,p.x,p.y))return {ok:false,message:"Baufeld liegt außerhalb gekaufter Grundstücke"};
+      const k=key(p.x,p.y);
+      if(s.roads.includes(k)||s.publicRoads.includes(k)||s.parking.includes(k))return {ok:false,message:"Baufläche überschneidet Zufahrt, Straße oder Parkplatz"};
+      if(s.projects.some(t=>t.status==="bau"&&t.points.some(q=>q.x===p.x&&q.y===p.y)))return {ok:false,message:"Baufeld bereits reserviert"};
+      if(s.buildings.some(b=>{
+        if(b.shape)return b.shape.some(([xx,yy])=>b.x+xx===p.x&&b.y+yy===p.y);
+        return p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h;
+      }))return {ok:false,message:"Baufeld ist bereits bebaut"};
+    }
+    const t=TYPES[tool],baseCost=Math.round(t.cost*shape.length/(t.w*t.h)),cost=Math.round(baseCost*.94);
+    return {ok:s.cash>=cost,message:s.cash>=cost?"Baufeld frei":"Nicht genügend Liquidität",cells:shape,
+      x:Math.min(...shape.map(p=>p.x)),y:Math.min(...shape.map(p=>p.y)),w:Math.max(...shape.map(p=>p.x))-Math.min(...shape.map(p=>p.x))+1,
+      h:Math.max(...shape.map(p=>p.y))-Math.min(...shape.map(p=>p.y))+1,cost:baseCost};
   }
   function place(s,tool,x,y,rotation=0){
     const p=preview(s,tool,x,y,rotation);
@@ -288,7 +470,7 @@
     return {ok:true,count:valid.length,skipped:uniq.length-valid.length,cost};
   }
   function demolish(s,x,y){
-    const b=s.buildings.find(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
+    const b=s.buildings.find(b=>b.shape?b.shape.some(([dx,dy])=>b.x+dx===x&&b.y+dy===y):x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h);
     if(b){if(s.projects.some(p=>p.buildingId===b.id&&p.status==="bau"))return {ok:false,message:"Für laufende Bauvorhaben zuerst den Bauauftrag stornieren"};if(b.tenantId)return {ok:false,message:"Vermietetes Gebäude kann nicht abgerissen werden"};s.cash-=12000;s.buildings=s.buildings.filter(a=>a!==b);s.devices=s.devices.filter(d=>d.buildingId!==b.id);addMessage(s,"Rückbau abgeschlossen",b.name+" wurde zurückgebaut.");return {ok:true};}
     const p=key(x,y);for(const name of ["roads","parking","trees"]){if(s[name].includes(p)){s[name]=s[name].filter(k=>k!==p);return {ok:true};}}
     return {ok:false,message:"Hier befindet sich kein Bauobjekt"};
@@ -312,7 +494,7 @@
   function addFloor(s,bid){
     const b=s.buildings.find(x=>x.id===bid);if(!b)return {ok:false,message:"Gebäude nicht gefunden"};
     if(b.floors.length>=8)return {ok:false,message:"Maximal acht Etagen"};
-    const price=65000+b.w*b.h*2600;if(s.cash<price)return {ok:false,message:"Nicht genug Kapital"};
+    const price=65000+(b.shape?.length||b.w*b.h)*2600;if(s.cash<price)return {ok:false,message:"Nicht genug Kapital"};
     s.cash-=price;b.floors.push(floorFor(b,b.floors.length));b.levels=b.floors.length;
     addMessage(s,"Aufstockung beauftragt",b.name+" erhält eine zusätzliche Etage.");return {ok:true};
   }
@@ -322,8 +504,8 @@
     x1=Math.round(x1);y1=Math.round(y1);x2=Math.round(x2);y2=Math.round(y2);
     if(x1!==x2&&y1!==y2)return {ok:false,message:"Wände müssen gerade verlaufen"};
     let count=0;
-    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
-    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
+    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows||(!validCell(f,x-1,y)&&!validCell(f,x,y)))continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.windows)delete f.windows[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
+    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols||(!validCell(f,x,y-1)&&!validCell(f,x,y)))continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     return {ok:count>0,message:count?"":"Keine Segmente ausgewählt"};
   }
   function toggleDoor(s,bid,level,edge){
@@ -346,7 +528,7 @@
     const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],material=FLOOR_FINISHES[finish];
     if(!f)return {ok:false,message:"Etage nicht vorhanden"};
     x=Number(x);y=Number(y);
-    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=f.cols||y>=f.rows)return {ok:false,message:"Bodenfeld außerhalb der Etage"};
+    if(!Number.isInteger(x)||!Number.isInteger(y)||!validCell(f,x,y))return {ok:false,message:"Bodenfeld außerhalb des Gebäudegrundrisses"};
     if(!material)return {ok:false,message:"Bodenbelag unbekannt"};
     const k=key(x,y);
     if(f.floorFinishes&&f.floorFinishes[k]===finish)return {ok:false,message:"Bodenbelag ist bereits ausgewählt"};
@@ -357,7 +539,7 @@
     return {ok:true,cost:material.cost,finish};
   }
   function paint(s,bid,level,x,y,type){
-    const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!f||x<0||y<0||x>=f.cols||y>=f.rows||!FLOOR_TYPES[type])return {ok:false,message:"Ungültiger Raum"};
+    const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!FLOOR_TYPES[type]||!validCell(f,x,y))return {ok:false,message:"Ungültiger Raum oder außerhalb des Gebäudegrundrisses"};
     f.tiles[key(x,y)]=type;return {ok:true};
   }
   function putItem(s,bid,level,x,y,type){
@@ -369,6 +551,98 @@
     if(t.device)device(s,b,type,x,y,level);else f.items.push({id:id(s,"ITM"),x,y,type});
     return {ok:true};
   }
+
+  const maskCache=new WeakMap();
+  function validCell(f,x,y){return !!f&&x>=0&&y>=0&&x<f.cols&&y<f.rows&&(!f.mask||(()=>{let set=maskCache.get(f.mask);if(!set){set=new Set(f.mask);maskCache.set(f.mask,set);}return set.has(key(Math.floor(x),Math.floor(y)));})());}
+  function placeAsset(s,bid,level,assetId,x,y,rotation=0,variant){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],def=ASSET_INDEX[assetId];
+    if(!f||!def)return {ok:false,message:"Katalogobjekt nicht vorhanden"};
+    x=Math.round(Number(x)*4)/4;y=Math.round(Number(y)*4)/4;
+    if(!Number.isFinite(x)||!Number.isFinite(y))return {ok:false,message:"Position ungültig"};
+    const w=Math.abs(rotation)%2?def.d:def.w,d=Math.abs(rotation)%2?def.w:def.d;
+    if(x<0||y<0||x+w>f.cols+.0001||y+d>f.rows+.0001)return {ok:false,message:"Außerhalb des Gebäudes"};
+    for(let yy=Math.floor(y);yy<Math.ceil(y+d);yy++)for(let xx=Math.floor(x);xx<Math.ceil(x+w);xx++)if(!validCell(f,xx,yy))return {ok:false,message:"Außerhalb des Gebäudegrundrisses"};
+    if(def.mount==="wall"&&!Object.keys(f.walls).some(k=>{
+      const [o,ax,ay]=k.split(":");const wx=+ax,wy=+ay;
+      return o==="H"?(y>=wy-.8&&y<=wy+.4&&x<wx+1&&x+w>wx):(x>=wx-.8&&x<=wx+.4&&y<wy+1&&y+d>wy);
+    }))return {ok:false,message:"Geeignete Wand zur Montage fehlt"};
+    const collisions=f.items.filter(it=>{
+      if(it.mount==="ceiling"||def.mount==="ceiling")return false;
+      return x<it.x+(it.w||1)-.01&&x+w>it.x+.01&&y<it.y+(it.d||1)-.01&&y+d>it.y+.01;
+    });
+    const desktop=["computer","router","switch","firewall","nvr","server"].includes(def.base);
+    if(collisions.length&&!(desktop&&collisions.every(it=>["desk","table","rack","shelf"].includes(it.type)))&&def.mount!=="wall")
+      return {ok:false,message:"Stellfläche bereits belegt"};
+    if(desktop&&def.mount==="floor"&&!f.items.some(it=>
+      ["desk","table","rack","shelf"].includes(it.type)&&x>=it.x-.01&&y>=it.y-.01&&x+w<=it.x+(it.w||1)+.01&&y+d<=it.y+(it.d||1)+.01
+    ))return {ok:false,message:"Computer oder Netzwerkgerät muss vollständig auf einem Tisch, Rack oder Regal stehen"};
+    if(variant&&!def.variants.includes(variant))return {ok:false,message:"Unbekannte Produktvariante"};
+    if(s.cash<def.price)return {ok:false,message:"Zu wenig Geld"};
+    const it={id:id(s,"ITM"),type:def.base,assetId:def.id,x,y,w,d,h:def.h,mount:def.mount,rotation:rotation%2?1:0,variant:variant||def.variants[0]};
+    s.cash-=def.price;f.items.push(it);
+    if(["printer","hvac","light","toilet","sink","camera","alarm","sprinkler","reader","machine","router","switch","firewall","server","rack","wifi","nvr","motion","contact","ups","emergencyLight"].includes(def.base)){
+      const dev={id:id(s,"DEV"),buildingId:bid,floor:level,x,y,type:def.base,assetId:def.id,state:"ok",condition:95,uses:0};
+      s.devices.push(dev);it.deviceId=dev.id;
+    }
+    return {ok:true,item:it,cost:def.price};
+  }
+  function placeSet(s,bid,level,setId,x,y,rotation=0){
+    const group=FURNITURE_SETS[setId];if(!group)return {ok:false,message:"Einrichtungsvorlage unbekannt"};
+    const turned=Math.abs(rotation)%2===1,maxDepth=Math.max(...group.pieces.map(p=>p.y+ASSET_INDEX[p.id].d));
+    const shifted=group.pieces.map(p=>({asset:p.id,x:Math.round((x+(turned?maxDepth-p.y-ASSET_INDEX[p.id].d:p.x))*4)/4,y:Math.round((y+(turned?p.x:p.y))*4)/4}));
+    // Validate the complete group on a simulation copy before charging or changing the real save.
+    const preview=clone(s);
+    for(const p of shifted){const result=placeAsset(preview,bid,level,p.asset,p.x,p.y,rotation);if(!result.ok)return result;}
+    let cost=0;
+    for(const p of shifted){const result=placeAsset(s,bid,level,p.asset,p.x,p.y,rotation);if(!result.ok)throw Error("Validated set could not be placed");cost+=result.cost;}
+    return {ok:true,count:shifted.length,cost};
+  }
+  function removeAsset(s,bid,level,itemId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],it=f&&f.items.find(it=>it.id===itemId);
+    if(!it)return {ok:false,message:"Objekt nicht gefunden"};
+    f.items=f.items.filter(x=>x!==it);
+    if(it.deviceId){s.devices=s.devices.filter(d=>d.id!==it.deviceId);s.tickets=s.tickets.filter(t=>t.deviceId!==it.deviceId);}
+    const price=ASSET_INDEX[it.assetId]?.price||ITEM_TYPES[it.type]?.cost||0;
+    s.cash+=Math.round(price*.5);return {ok:true,refund:Math.round(price*.5)};
+  }
+  function installOpening(s,bid,level,edge,kind,modelId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],models=kind==="door"?DOOR_MODELS:kind==="window"?WINDOW_MODELS:null,model=models&&models[modelId];
+    if(!f||!model)return {ok:false,message:"Bauteil nicht bekannt"};
+    const [axis,xs,ys]=String(edge).split(":"),x=Number(xs),y=Number(ys);
+    if(!["H","V"].includes(axis)||!Number.isInteger(x)||!Number.isInteger(y))return {ok:false,message:"Wandsegment ungültig"};
+    const keys=Array.from({length:model.width},(_,i)=>axis+":"+(x+(axis==="H"?i:0))+":"+(y+(axis==="V"?i:0)));
+    if(keys.some(k=>!f.walls[k]))return {ok:false,message:"Zusammenhängende Wandfläche für "+model.width+" m Öffnung fehlt"};
+    if(keys.some(k=>f.doors[k]||f.windows&&f.windows[k]))return {ok:false,message:"Wandöffnung bereits belegt"};
+    if(kind==="window"&&keys.some(k=>{const [o,xs,ys]=k.split(":");const xx=+xs,yy=+ys;return o==="H"?(validCell(f,xx,yy-1)===validCell(f,xx,yy)):(validCell(f,xx-1,yy)===validCell(f,xx,yy));}))
+      return {ok:false,message:"Fenster benötigen eine Außenwand"};
+    if(s.cash<model.price)return {ok:false,message:"Bauteil nicht finanzierbar"};
+    const group=kind==="door"?f.doors:(f.windows||(f.windows={})),item={id:id(s,"OPN"),model:modelId,span:model.width,root:edge};
+    for(const k of keys)group[k]=item;
+    s.cash-=model.price;return {ok:true,opening:item,cost:model.price};
+  }
+  function removeOpening(s,bid,level,edge){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level];
+    if(!f)return {ok:false,message:"Etage fehlt"};
+    for(const col of ["doors","windows"]){const obj=f[col]&&f[col][edge];if(!obj)continue;const root=obj.root||edge;
+      for(const k of Object.keys(f[col]))if(k===edge||f[col][k]?.root===root)delete f[col][k];return {ok:true};}
+    return {ok:false,message:"Keine Wandöffnung vorhanden"};
+  }
+  function paintZone(s,bid,level,x,y,zoneId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level];
+    if(!ZONE_TYPES[zoneId]||!validCell(f,x,y))return {ok:false,message:"Zone außerhalb des Gebäudes"};
+    if(!f.zones)f.zones={};f.zones[key(x,y)]=zoneId;return {ok:true};
+  }
+  function zoneReport(s,bid,level,zoneId){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],z=ZONE_TYPES[zoneId];
+    if(!f||!z)return {ok:false,message:"Zone unbekannt"};
+    const cells=Object.keys(f.zones||{}).filter(k=>f.zones[k]===zoneId),count={};
+    for(const it of f.items)if(cells.some(k=>{const [x,y]=k.split(",").map(Number);return it.x<x+1&&it.x+(it.w||1)>x&&it.y<y+1&&it.y+(it.d||1)>y;}))count[it.type]=(count[it.type]||0)+1;
+    const caps={network:(count.router||0)+(count.switch||0),access:count.reader,ventilation:count.hvac,exit:Object.keys(f.doors).length};
+    const requirements=z.needs.map(req=>({name:req,ok:(count[req]||caps[req]||0)>0}));
+    if(cells.length<z.minArea)requirements.push({name:"Mindestfläche "+z.minArea+" m²",ok:false});
+    return {ok:true,zone:zoneId,name:z.name,area:cells.length,requirements,ready:requirements.every(a=>a.ok)};
+  }
+
   function parkingCount(s){return s.parking.length*2;}
   function capacity(b){
     if(!b)return 0;
@@ -488,5 +762,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,FURNITURE_SETS,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,previewFootprint,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,placeSet,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
