@@ -75,3 +75,27 @@
 @media(max-width:1200px){.panel-body{grid-template-columns:repeat(2,minmax(0,1fr))}.panel-body>.statgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:850px){.panel{left:60px!important}.panel-body{grid-template-columns:1fr;padding:24px}.panel-body>.statgrid{gap:10px}.panel-top{padding:23px}.panel-body>.help-list{columns:1}}
 @media(max-width:700px){.panel{top:0!important;left:60px!important}.panel-body>.statgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel-top h2{font-size:24px}.panel-top .icon-btn{padding:0 10px}.panel-top .icon-btn:before{content:"Zur Karte"}.map-hint{font-size:9px}.tool-stats{bottom:100px;left:8px}}
+
+/* Construction procurement. A separate modal keeps quotes in-world without masking the map permanently. */
+.contractor-backdrop{position:absolute;inset:0;z-index:14;display:flex;justify-content:center;align-items:center;background:rgba(10,30,39,.48);backdrop-filter:blur(5px);padding:20px}
+.contractor-dialog{width:min(760px,100%);max-height:min(85vh,760px);display:flex;flex-direction:column;overflow:hidden;border-radius:18px;background:#f7fafb;border:1px solid #e5eff1;box-shadow:0 28px 90px #102d3b7a}
+.contractor-head{background:#fff;display:flex;justify-content:space-between;align-items:flex-start;padding:26px 30px 21px;border-bottom:1px solid #e1e9ec}
+.contractor-head small{font-weight:750;color:#6d94a2;letter-spacing:1.8px;font-size:10px}
+.contractor-head h2{font-size:27px;margin:7px 0 6px;letter-spacing:-.9px}
+.contractor-head p{font-size:12px;color:#78909b;margin:0;line-height:1.5}
+.contractor-offers{padding:20px 26px;overflow-y:auto;display:grid;gap:12px;align-content:start}
+.contractor-offer{display:flex;justify-content:space-between;align-items:center;gap:20px;background:#fff;border:1px solid #e1e9ed;border-radius:12px;padding:18px 20px}
+.contractor-offer h3{margin:0 0 7px;font-size:14px;color:#254653}
+.contractor-offer p{margin:0;font-size:11px;color:#7d9198;line-height:1.6}
+.contractor-offer .offer-facts{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;color:#477787;font-size:10px;font-weight:650}
+.contractor-offer .offer-price{text-align:right;min-width:160px}
+.contractor-offer .offer-price strong{display:block;font-size:20px;margin-bottom:7px}
+.contractor-offer.disabled{opacity:.57}
+.contractor-offer .action{min-width:130px}
+.contractor-foot{padding:16px 26px;background:#fff;border-top:1px solid #e2eaec;display:flex;justify-content:space-between;align-items:center;gap:14px}
+.contractor-foot span{font-size:11px;color:#7e949d;max-width:480px;line-height:1.5}
+.empty-state{grid-column:1/-1;padding:34px 38px;background:#fff;border:1px dashed #bed2d8;border-radius:14px}
+.empty-state h3{font-size:18px;margin:0 0 8px;color:#294958}
+.empty-state p{font-size:12px;line-height:1.75;color:#78919a;max-width:670px}
+.empty-state .action{margin:4px 8px 0 0}
+@media(max-width:700px){.contractor-offer{flex-direction:column;align-items:stretch}.contractor-offer .offer-price{text-align:left}.contractor-dialog{max-height:92vh}.contractor-head{padding:20px}.contractor-offers{padding:12px}.contractor-foot{padding:12px}.contractor-offer{gap:10px}}
