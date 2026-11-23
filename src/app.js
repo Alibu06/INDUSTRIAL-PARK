@@ -204,9 +204,91 @@ function helpPanel(){
  +'<div class="section-label">SPIELSTAND</div>'+button("save","Jetzt speichern","","primary")+' '+button("reset","Neues Spiel beginnen","","danger")
  +'<div class="divider"></div><p class="fine">V1.0 ist ein spielbarer Grundausbau. Komplexe Feuerwehrtaktik, Live-Kameras, mehrstufige Bauabnahmen und volle Personeneinzelsimulation sind noch nicht implementiert.</p>';
 }
+function landPanel(){
+ const area=S.propertyArea(state),owned=state.parcels.filter(p=>p.owned).length;
+ return '<div class="statgrid">'+stat("Eigene Grundstücke",owned)+stat("Eigentumsfläche",area.toLocaleString("de-DE")+" m²")
+ +stat("Freie Baufläche",state.buildings.length?"In Entwicklung":"Vollständig frei")
+ +stat("Kaufangebote",state.parcels.length-owned)+'</div>'
+ +'<p class="panel-note">Du startest mit einem einzigen unbebauten Grundstück. Nur erworbene Parzellen lassen sich bebauen oder erschließen. Die öffentliche Zufahrtsstraße gehört nicht zum Gewerbepark.</p>'
+ +'<div class="section-label">GRUNDSTÜCKE UND ERWEITERUNGSFLÄCHEN</div>'
+ +state.parcels.map(p=>entry(esc(p.name),p.id+" · "+p.w*p.h*16+" m² Grundstücksfläche",
+ '<span class="pill '+(p.owned?"":"warning")+'">'+(p.owned?"Im Eigentum":"Zum Erwerb angeboten")+'</span>'
+ +line("Ausdehnung",p.w*4+" × "+p.h*4+" m")
+ +line("Standort","Karte "+p.x+" / "+p.y)
+ +line("Kaufpreis",p.owned?"Bereits erworben":euros(p.price))
+ +'<div class="buttons">'+button("focus-parcel","Auf Karte",'data-id="'+p.id+'"')
+ +(p.owned?"":button("buy-parcel","Grundstück kaufen",'data-id="'+p.id+'"',state.cash>=p.price?"primary":""))+'</div>'
+ )).join("")
+ +'<p class="fine">Die Flächenpreise sind Spielwerte und keine regionalen Immobilienmarktangebote. Ein Ankauf verändert unmittelbar den zulässigen Baugrund.</p>';
+}
+function projectsPanel(){
+ const active=state.projects.filter(p=>p.status==="bau"),completed=state.projects.filter(p=>p.status==="fertig");
+ const own=state.constructionDept,m=S.metrics(state);
+ return '<div class="statgrid">'+stat("Laufende Projekte",active.length)+stat("Fertige Bauaufträge",completed.length)
+ +stat("Eigene Bauarbeiter",own.workers)+stat("Baustellenbudget",euros(state.cash))+'</div>'
+ +'<p class="panel-note">Vor jeder Baumaßnahme holst du mehrere echte Angebote ein. Bis zum Aufbau deines eigenen Bauunternehmens übernehmen fremde Betriebe sämtliche Hoch- und Tiefbauarbeiten. Zeit, Preis und Qualität variieren je Auftragnehmer.</p>'
+ +'<div class="section-label">AKTUELLE BAUSTELLEN</div>'
+ +(active.map(p=>{
+ const b=p.buildingId&&building(p.buildingId),label=b?b.name:p.tool==="road"?"Straßen- und Wegebau":p.tool==="parking"?"Parkplatzbau":"Außenanlagen und Grünpflege";
+ const done=Math.round(100*(1-p.remaining/p.totalDays));
+ return entry(esc(label),esc(p.id)+" · "+esc(p.contractorName),
+ '<span class="pill warning">Im Bau</span>'+line("Auftragssumme",euros(p.quote))
+ +line("Restbauzeit",p.remaining+" Tage")+line("Fortschritt",done+" %")
+ +'<div class="progress-track"><div class="progress-fill" style="width:'+done+'%"></div></div>'
+ +(b?button("map-building","Baustelle ansehen",'data-id="'+b.id+'"'):""));
+ }).join("")||'<div class="empty-state"><h3>Noch kein Bauauftrag vergeben</h3><p>Wähle auf der Parkkarte zuerst eine Straße, eine Stellfläche oder ein Gebäude. Beim Platzieren öffnet sich die Vergabe mit mehreren Angeboten.</p>'+button("world-view","Bauvorhaben auf der Karte planen","","primary")+'</div>')
+ +'<div class="section-label">EIGENE BAUABTEILUNG</div>'
+ +entry(own.active?"Eigener Baubetrieb · aktiv":"Eigene Bauabteilung gründen",
+ own.active?"Eigene Maschinen und Fachkräfte sind verfügbar.":"Wirtschaftlicher Ausbauschritt mit dauerhaftem Personal- und Geräteaufwand.",
+ own.active?'<span class="pill">Eigenbetrieb</span>'
+ +line("Bauarbeiter",own.workers)+line("Geräteeinheiten",own.equipment)
+ +line("Monatlicher Baustellenpersonalaufwand",euros(own.workers*3350+2800))
+ +'<div class="inline-controls"><span>Bauarbeiter einstellen / entlassen</span><div>'+button("builders-down","−","","small")+' <b>'+own.workers+'</b> '+button("builders-up","+","","small")+'</div></div>'
+ +'<p class="fine">Eigene Projekte sind günstiger, aber nur bei wenigstens fünf verfügbaren Bauarbeitern und einer freien Baukolonne durchführbar.</p>'
+ :line("Investition in Personal und Maschinen",euros(255000))
+ +line("Startbesetzung","5 Bauarbeiter · 2 Geräteeinheiten")
+ +line("Laufende Kosten","19.550 € / Monat")
+ +'<p class="fine">Ein eigener Betrieb rechnet sich erst bei ausreichend vielen Bauaufträgen und entsprechender Auslastung.</p>'
+ +button("found-crew","Eigenen Baubetrieb aufbauen","","primary full"))
+ +'<div class="section-label">ABGESCHLOSSENE BAUARBEITEN</div>'
+ +(completed.slice(-9).reverse().map(p=>entry(esc(p.contractorName),p.id+" · Abschluss "+p.completed,
+ line("Auftragswert",euros(p.quote))+line("Ausführungszeit",p.totalDays+" Tage"))).join("")||'<p class="panel-note">Noch keine abgeschlossenen Maßnahmen.</p>');
+}
+function openConstructionOffer(plan){
+ const tool=plan.tool,isBuilding=!!S.TYPES[tool];
+ if(isBuilding){
+   const p=S.preview(state,tool,plan.x,plan.y,plan.rotation||0);
+   if(!p.ok){notify(p.message,true);return;}
+ }else{
+   const points=plan.points||[],unique=new Set();
+   for(const p of points){const pr=S.preview(state,tool,p.x,p.y);if(!pr.ok){notify(pr.message+" · "+p.x+"/"+p.y,true);return;}unique.add(p.x+","+p.y);}
+   if(!unique.size){notify("Bitte zuerst einen Bauzug zeichnen.",true);return;}
+   plan.points=Array.from(unique,k=>{const [x,y]=k.split(",").map(Number);return {x,y};});
+ }
+ ui.pendingPlan=plan;
+ const count=isBuilding?1:plan.points.length;
+ const quote=S.getQuotes(state,tool,count),name=isBuilding?S.TYPES[tool].name:tool==="road"?"Straßenbau":tool==="parking"?"Parkplatzbau":"Begrünung";
+ $("contractorTitle").textContent=name+" beauftragen";
+ $("contractorSummary").textContent=isBuilding?
+ "Gebäude "+S.TYPES[tool].w*4+" × "+S.TYPES[tool].h*4+" Meter · Mehrere Angebote für Bauzeit, Preis und Ausführungsqualität":
+ count+" Felder · "+(count*16).toLocaleString("de-DE")+" m² · Bauarbeiten werden erst nach Fertigstellung sichtbar";
+ $("contractorOffers").innerHTML=quote.map(q=>
+ '<div class="contractor-offer'+(!q.available?" disabled":"")+'"><div><h3>'+esc(q.name)+'</h3><p>'+esc(q.description)+'</p>'
+ +'<div class="offer-facts"><span>◷ '+q.days+' Tage</span><span>Qualität '+q.quality+' / 100</span><span>'+(q.own?"Eigenbetrieb":"Externer Unternehmer")+'</span></div></div>'
+ +'<div class="offer-price"><strong>'+euros(q.price)+'</strong>'
+ +button("commission-project",q.available?(state.cash>=q.price?"Auftrag vergeben":"Kapital reicht nicht"):"Kolonne beschäftigt",
+ 'data-contractor="'+esc(q.id)+'" '+(!q.available||state.cash<q.price?"disabled":""),"primary")+'</div></div>').join("");
+ $("contractorModal").classList.remove("hidden");
+}
+function closeConstructionOffer(){ui.pendingPlan=null;$("contractorModal").classList.add("hidden");}
+function focusParcel(id){
+ const p=state.parcels.find(p=>p.id===id);if(!p)return;
+ setViewWorld();ui.cam.cx=p.x+p.w/2;ui.cam.cy=p.y+p.h/2;ui.cam.panX=0;ui.cam.panY=0;ui.cam.zoom=1;
+ closePanel();refresh();
+}
 function updatePanel(){
  const panel=$("panel");if(panel.classList.contains("hidden"))return;
- const sections={property:["Immobilienobjekt",propertyPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
+ const sections={property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
  const section=sections[ui.nav]||sections.buildings;$("panelTitle").textContent=section[0];$("panelBody").innerHTML=section[1]();
 }
 function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats();updatePanel();}
