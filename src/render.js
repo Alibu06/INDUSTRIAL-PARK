@@ -500,33 +500,136 @@ function factory(canvas){
   }
   c.restore();
  }
+ function wallFinish(f,edge){
+   const id=f.wallFinishes&&f.wallFinishes[edge]||"white";
+   return S.WALL_FINISHES&&S.WALL_FINISHES[id]?S.WALL_FINISHES[id]:{color:"#e9e8df",name:"Warmweiß"};
+ }
+ function floorPlan(s,u,b,f,g){
+   const z=g.size;
+   c.save();c.shadowColor="rgba(23,50,60,.19)";c.shadowBlur=30;c.shadowOffsetY=12;
+   c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);c.restore();
+   for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
+     const type=f.tiles[S.key(x,y)]||"office";
+     c.fillStyle=roomColors[type]||"#eff0ef";c.fillRect(g.x+x*z,g.y+y*z,z,z);
+     c.strokeStyle="rgba(78,113,128,.09)";c.lineWidth=.6;c.strokeRect(g.x+x*z,g.y+y*z,z,z);
+     if(z>23&&x%4===1&&y%4===1)drawText(S.FLOOR_TYPES[type]||"",g.x+(x+.5)*z,g.y+(y+.5)*z,8,"rgba(58,82,96,.25)");
+   }
+   for(const it of f.items)drawItem(it,{x:g.x+it.x*z,y:g.y+it.y*z},z,s);
+   for(const edge of Object.keys(f.walls)){
+     const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
+     const p=floorPoint(g,x,y),q=floorPoint(g,x+(o==="H"?1:0),y+(o==="V"?1:0));
+     const paint=wallFinish(f,edge).color;
+     line(c,p,q,f.doors[edge]?"#b48756":paint,Math.max(4,z*.24));
+     if(f.doors[edge]){
+       const mid=mix(p,q,.5);
+       c.fillStyle="#f5f8f6";c.beginPath();c.arc(mid.x,mid.y,z*.14,0,TAU);c.fill();
+       line(c,mid,mix(p,q,.86),"#9e805f",1.1);
+     }
+   }
+   const h=u.hoverFloor;
+   if(h&&h.inside){
+     c.fillStyle="rgba(56,143,175,.2)";c.fillRect(g.x+h.x*z,g.y+h.y*z,z,z);
+     c.strokeStyle="#3b8eb0";c.lineWidth=2;c.strokeRect(g.x+h.x*z,g.y+h.y*z,z,z);
+   }
+   if(u.wallStart&&h&&u.tool==="wall"){
+     line(c,floorPoint(g,u.wallStart.x,u.wallStart.y),floorPoint(g,h.nx,h.ny),"#24a0b4",Math.max(3,z*.16));
+   }
+ }
+ function drawIsoWall(f,g,edge,highlight){
+   const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
+   const a=floorPoint(g,x,y),b=floorPoint(g,x+(o==="H"?1:0),y+(o==="V"?1:0));
+   const exterior=(o==="H"&&(y===0||y===f.rows))||(o==="V"&&(x===0||x===f.cols));
+   const near=(o==="H"&&y===f.rows)||(o==="V"&&x===f.cols);
+   const height=near?.42:exterior?1.9:1.5;
+   const mat=wallFinish(f,edge),glass=(f.wallFinishes&&f.wallFinishes[edge]==="glass");
+   const color=mat.color,door=!!f.doors[edge],z=g.size;
+   const drawPart=(start,end,lo,hi)=>{
+     if(end<=start||hi<=lo)return;
+     const aa=mix(a,b,start),bb=mix(a,b,end);
+     const a0={x:aa.x,y:aa.y-lo*z},b0={x:bb.x,y:bb.y-lo*z};
+     const at={x:aa.x,y:aa.y-hi*z},bt={x:bb.x,y:bb.y-hi*z};
+     c.save();c.globalAlpha=glass?.47:1;
+     polygon(c,[a0,b0,bt,at],color,highlight?"#39c3c5":"rgba(44,75,86,.35)",highlight?2:.65);
+     polygon(c,[at,bt,{x:bt.x+z*.09,y:bt.y-z*.02},{x:at.x+z*.09,y:at.y-z*.02}],
+       glass?"#bde7f0":"#f5f6f1","rgba(57,76,81,.15)",.45);
+     c.restore();
+     if(glass)line(c,at,bt,"rgba(52,101,128,.85)",1);
+   };
+   if(door&&!near){
+     drawPart(0,.16,0,height);drawPart(.84,1,0,height);
+     drawPart(.16,.84,Math.min(height*.78,1.22),height);
+     const p=mix(a,b,.18),q=mix(a,b,.74);
+     line(c,p,q,"#a67f54",Math.max(1.2,z*.065));
+     // Swing arc indicates a real doorway instead of a painted rectangle.
+     c.strokeStyle="#a78a66";c.lineWidth=1;c.beginPath();
+     c.arc(p.x,p.y,z*.46,-Math.PI*.24,Math.PI*.17);c.stroke();
+   }else drawPart(0,1,0,height);
+ }
+ function isoItem(it,g,s){
+   const z=g.size,x=it.x,y=it.y,p=floorPoint(g,x,y);
+   const heights={desk:.47,chair:.28,table:.4,shelf:.88,printer:.68,hvac:.8,machine:.95,
+     plant:.38,toilet:.31,sink:.48,dispenser:.65,light:.20,camera:.34,
+     alarm:.16,sprinkler:.12,reader:.38,pallet:.20};
+   const h=heights[it.type]||.42;
+   const ztop=h*z;
+   const a=floorPoint(g,x+.13,y+.13),b=floorPoint(g,x+.87,y+.13),
+     d=floorPoint(g,x+.87,y+.87),e=floorPoint(g,x+.13,y+.87);
+   const lift=q=>({x:q.x,y:q.y-ztop});
+   const tone=it.type==="desk"||it.type==="table"?"#93785d":"#8599a0";
+   polygon(c,[e,d,lift(d),lift(e)],tone,"rgba(45,65,74,.23)",.4);
+   polygon(c,[b,d,lift(d),lift(b)],"#718993","rgba(38,65,77,.24)",.4);
+   polygon(c,[lift(a),lift(b),lift(d),lift(e)],"#d6d9d3","rgba(37,69,77,.26)",.7);
+   const top=floorPoint(g,x,y,h);
+   c.save();c.translate(top.x,top.y);
+   c.transform(1,.5,-1,.5,0,0);
+   drawItem(it,{x:0,y:0},z,s);
+   c.restore();
+ }
+ function floorIso(s,u,b,f,g){
+   const a=floorPoint(g,0,0),bb=floorPoint(g,f.cols,0),
+     d=floorPoint(g,f.cols,f.rows),e=floorPoint(g,0,f.rows);
+   const down=p=>({x:p.x,y:p.y+g.size*.54});
+   c.save();c.shadowColor="rgba(25,47,59,.16)";c.shadowBlur=26;c.shadowOffsetY=12;
+   polygon(c,[e,d,down(d),down(e)],"#bac4c7");c.restore();
+   polygon(c,[e,d,down(d),down(e)],"#a9b6ba","#93a7af",1);
+   polygon(c,[bb,d,down(d),down(bb)],"#8f9fa7","#8699a4",1);
+   polygon(c,[a,bb,d,e],"#d7d9d6","#708a96",1.3);
+   for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
+     const type=f.tiles[S.key(x,y)]||"office";
+     const pts=[floorPoint(g,x,y),floorPoint(g,x+1,y),floorPoint(g,x+1,y+1),floorPoint(g,x,y+1)];
+     const color=roomColors[type]||"#eef0eb";
+     polygon(c,pts,color,"rgba(70,92,100,.07)",.4);
+     if(x%4===0&&y%4===0&&g.size>12){
+       line(c,floorPoint(g,x+.14,y+.5),floorPoint(g,x+.32,y+.5),"rgba(88,107,112,.13)",.45);
+     }
+   }
+   const drawing=[];
+   const hovers=u.hoverFloor&&u.hoverFloor.inside?u.hoverFloor:null;
+   for(const edge of Object.keys(f.walls)){
+     const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
+     drawing.push({depth:o==="H"?x+.5+y:x+y+.5,wall:true,edge,draw:()=>drawIsoWall(f,g,edge,false)});
+   }
+   for(const it of f.items){
+     drawing.push({depth:it.x+it.y+1,wall:false,draw:()=>isoItem(it,g,s)});
+   }
+   drawing.sort((a,b)=>a.depth-b.depth||(a.wall&&!b.wall?-1:!a.wall&&b.wall?1:0));
+   for(const thing of drawing)thing.draw();
+   if(hovers){
+     const pts=[floorPoint(g,hovers.x,hovers.y,.08),floorPoint(g,hovers.x+1,hovers.y,.08),
+       floorPoint(g,hovers.x+1,hovers.y+1,.08),floorPoint(g,hovers.x,hovers.y+1,.08)];
+     polygon(c,pts,"rgba(60,177,191,.22)","#3da6ba",1.5);
+   }
+   if(u.wallStart&&hovers&&u.tool==="wall"){
+     const p=floorPoint(g,u.wallStart.x,u.wallStart.y,.12),q=floorPoint(g,hovers.nx,hovers.ny,.12);
+     line(c,p,q,"#1bb5bd",Math.max(2.2,g.size*.14));
+   }
+ }
  function floor(s,u){
-  c.fillStyle="#e6edf0";c.fillRect(0,0,cw,ch);
-  const b=s.buildings.find(b=>b.id===u.selectedId);if(!b)return;
-  const f=b.floors[u.floorIndex]||b.floors[0],g=floorGeom(u,f),z=g.size;
-  c.save();c.shadowColor="rgba(23,50,60,.19)";c.shadowBlur=30;c.shadowOffsetY=12;c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);c.restore();
-  for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
-    const type=f.tiles[S.key(x,y)]||"office";
-    c.fillStyle=roomColors[type]||"#eff0ef";c.fillRect(g.x+x*z,g.y+y*z,z,z);
-    c.strokeStyle="rgba(78,113,128,.09)";c.lineWidth=.6;c.strokeRect(g.x+x*z,g.y+y*z,z,z);
-    if(z>23&&x%4===1&&y%4===1){drawText(S.FLOOR_TYPES[type]||"",g.x+(x+.5)*z,g.y+(y+.5)*z,8,"rgba(58,82,96,.25)",false);}
-  }
-  for(const it of f.items)drawItem(it,{x:g.x+it.x*z,y:g.y+it.y*z},z,s);
-  c.strokeStyle="#526a79";c.lineWidth=Math.max(4,z*.19);c.strokeRect(g.x,g.y,f.cols*z,f.rows*z);
-  for(const edge of Object.keys(f.walls)){
-    const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
-    const a={x:g.x+x*z,y:g.y+y*z},bb=o==="H"?{x:a.x+z,y:a.y}:{x:a.x,y:a.y+z};
-    line(c,a,bb,f.doors[edge]?"#d6a45f":"#4b6777",f.doors[edge]?Math.max(3,z*.09):Math.max(4,z*.19));
-    if(f.doors[edge]){c.beginPath();c.arc(a.x,a.y,z*.7,o==="H"?0:-Math.PI/2,o==="H"?Math.PI/2:0);c.lineWidth=1.2;c.strokeStyle="#c69b65";c.stroke();}
-  }
-  if(u.hoverFloor&&u.hoverFloor.inside){
-    const h=u.hoverFloor;c.fillStyle="rgba(56,143,175,.2)";c.fillRect(g.x+h.x*z,g.y+h.y*z,z,z);c.strokeStyle="#3b8eb0";c.lineWidth=2;c.strokeRect(g.x+h.x*z,g.y+h.y*z,z,z);
-  }
-  if(u.wallStart&&u.hoverFloor&&u.tool==="wall"){
-    const p={x:g.x+u.wallStart.x*z,y:g.y+u.wallStart.y*z},q={x:g.x+u.hoverFloor.nx*z,y:g.y+u.hoverFloor.ny*z};
-    line(c,p,q,"#24a0b4",Math.max(3,z*.16));
-  }
-  drawText(b.name+" · "+f.label,cw/2,25,14,"#3b5968",true);
+   c.fillStyle="#e5eeeb";c.fillRect(0,0,cw,ch);
+   const b=s.buildings.find(b=>b.id===u.selectedId);if(!b)return;
+   const f=b.floors[u.floorIndex]||b.floors[0],g=floorGeom(u,f);
+   if(g.iso)floorIso(s,u,b,f,g);else floorPlan(s,u,b,f,g);
+   drawText(b.name+" · "+f.label+" · "+(g.iso?"2,5D-INNENANSICHT":"2D-BAUPLAN"),cw/2,24,14,"#315261",true);
  }
  function insidePoly(point,poly){
    let yes=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){
