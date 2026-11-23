@@ -232,19 +232,37 @@ function pickWall(f,h){
  if(vr<hr)return f.walls[v]?v:ho;
  return f.walls[ho]?ho:v;
 }
+function pathCells(tool,a,b){
+ const out=[],seen=new Set();
+ const add=(x,y)=>{const k=x+","+y;if(!seen.has(k)){seen.add(k);out.push({x,y});}};
+ if(tool==="road"){
+   const dx=Math.abs(b.x-a.x),dy=Math.abs(b.y-a.y),sx=b.x>=a.x?1:-1,sy=b.y>=a.y?1:-1;
+   if(dx>=dy){
+     for(let x=a.x;x!==b.x+sx;x+=sx)add(x,a.y);
+     for(let y=a.y+sy;y!==b.y+sy;y+=sy)add(b.x,y);
+   }else{
+     for(let y=a.y;y!==b.y+sy;y+=sy)add(a.x,y);
+     for(let x=a.x+sx;x!==b.x+sx;x+=sx)add(x,b.y);
+   }
+ }else{
+   for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++)
+     for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++)add(x,y);
+ }
+ return out.slice(0,700);
+}
 function floorClick(e){
  const b=building(ui.selectedId);if(!b)return;const pos=getLocation(e),h=renderer.hitFloor(pos.x,pos.y,ui,b),f=b.floors[ui.floorIndex];
  if(!h.inside)return;
  if(ui.tool==="wall"){
   if(!ui.wallStart){ui.wallStart={x:h.nx,y:h.ny};notify("Endpunkt der Wand wählen.");}
-  else{const a=ui.wallStart;ui.wallStart=null;const res=S.setWall(state,b.id,ui.floorIndex,a.x,a.y,h.nx,h.ny,false);choice(res.ok,res.message||"Wand eingefügt.");}
- }else if(ui.tool==="door"){const edge=pickWall(f,h),res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
+  else{const a=ui.wallStart;ui.wallStart=null;let ex=h.nx,ey=h.ny;if(a.x!==ex&&a.y!==ey){if(Math.abs(a.x-ex)>Math.abs(a.y-ey))ey=a.y;else ex=a.x;}checkpoint();const res=S.setWall(state,b.id,ui.floorIndex,a.x,a.y,ex,ey,false);choice(res.ok,res.message||"Wand eingefügt.");}
+ }else if(ui.tool==="door"){const edge=pickWall(f,h);if(f.walls[edge])checkpoint();const res=S.toggleDoor(state,b.id,ui.floorIndex,edge);choice(res.ok,res.message||"Tür gesetzt.");}
  else if(ui.tool==="erase"){
-  const i=f.items.find(i=>i.x===h.x&&i.y===h.y);
+  const i=f.items.find(i=>i.x===h.x&&i.y===h.y);checkpoint();
   if(i){f.items=f.items.filter(j=>j!==i);if(i.deviceId)state.devices=state.devices.filter(d=>d.id!==i.deviceId);notify("Objekt entfernt.");}
   else{const edge=pickWall(f,h);delete f.walls[edge];delete f.doors[edge];notify("Wandsegment entfernt.");}
- }else if(ui.tool.startsWith("room:")){const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
- else if(ui.tool.startsWith("item:")){const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");}
+ }else if(ui.tool.startsWith("room:")){checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
+ else if(ui.tool.startsWith("item:")){checkpoint();const r=S.putItem(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));choice(r.ok,r.message||"Ausstattung platziert.");if(!r.ok)undoStack.pop();}
  refresh();
 }
 function worldClick(e){
@@ -253,7 +271,10 @@ function worldClick(e){
   const b=state.buildings.slice().reverse().find(b=>h.x>=b.x&&h.x<b.x+b.w&&h.y>=b.y&&h.y<b.y+b.h);
   selectBuilding(b);return;
  }
- const res=ui.tool==="demolish"?S.demolish(state,h.x,h.y):S.place(state,ui.tool,h.x,h.y);
+ const isDemolition=ui.tool==="demolish",p=isDemolition?{ok:true}:S.preview(state,ui.tool,h.x,h.y,ui.rotation);
+ if(!p.ok){notify(p.message,true);return;}checkpoint();
+ const res=isDemolition?S.demolish(state,h.x,h.y):S.place(state,ui.tool,h.x,h.y,ui.rotation);
+ if(!res.ok)undoStack.pop();
  if(res.ok){if(res.building)ui.selectedId=res.building.id;refresh();notify(res.building?"Bauprojekt angelegt.":"Bauobjekt platziert.");}
  else notify(res.message,true);
 }
@@ -280,15 +301,15 @@ function act(name,element){
  case "redo":restoreHistory("redo");break;
  case "world-view":setViewWorld();break;
  case "focus-building":if(building(ui.selectedId)){setViewWorld();focusBuilding(building(ui.selectedId));closePanel();refresh();}break;
- case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.mode="floor";ui.tool="wall";ui.wallStart=null;refresh();break;
- case "add-floor":res=S.addFloor(state,ui.selectedId);choice(res.ok,res.message||"Etage ergänzt.");refresh();break;
+ case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.mode="floor";ui.tool="wall";ui.wallStart=null;closePanel();refresh();break;
+ case "add-floor":checkpoint();res=S.addFloor(state,ui.selectedId);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Etage ergänzt.");refresh();break;
  case "go-leasing":panelOpen("leasing");break;
  case "inspect-building":ui.selectedId=id;panelOpen("property");break;
  case "map-building":setViewWorld();focusBuilding(building(id));closePanel();refresh();break;
  case "lease":{
   const i=Number(element.dataset.index),a=state.applicants[i],sel=$("leaseBuilding"+i),r=$("leaseRent"+i);
   if(!a||!sel||!r)return;
-  res=S.rent(state,sel.value,a.name,Number(r.value));choice(res.ok,res.message||"Mietvertrag angenommen.");refresh();break;
+  checkpoint();res=S.rent(state,sel.value,a.name,Number(r.value));if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Mietvertrag angenommen.");refresh();break;
  }
  case "dispatch":res=S.dispatch(state,id);choice(res.ok,res.message||"Reparaturauftrag vergeben.");refresh();break;
  case "toggle-autodispatch":state.autodispatch=!state.autodispatch;refresh();notify(state.autodispatch?"Automatische Disposition aktiv.":"Automatische Disposition deaktiviert.");break;
@@ -298,12 +319,12 @@ function act(name,element){
  case "loan":state.debt+=250000;state.cash+=250000;refresh();notify("250.000 € Darlehen ausgezahlt. Rückzahlung und Zinsen werden berücksichtigt.");break;
  case "repay":if(state.cash<50000||state.debt<50000)notify("Tilgung aktuell nicht möglich.",true);else{state.cash-=50000;state.debt-=50000;refresh();notify("50.000 € Darlehen getilgt.");}break;
  case "save":saveGame();break;
- case "reset":if(confirm("Neues Spiel beginnen? Der aktuelle lokale Spielstand wird überschrieben.")){state=S.create();ui.mode="world";ui.selectedId=null;ui.tool="select";ui.cam={cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0};closePanel();refresh();saveGame(true);notify("Neues Spiel begonnen.");}break;
+ case "reset":if(confirm("Neues Spiel beginnen? Der aktuelle lokale Spielstand wird überschrieben.")){undoStack.length=0;redoStack.length=0;state=S.create();ui.mode="world";ui.selectedId=null;ui.tool="select";ui.cam={cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0};closePanel();refresh();saveGame(true);notify("Neues Spiel begonnen.");}break;
  case "context-inspect":ui.selectedId=menuTarget.buildingId;panelOpen("property");break;
  case "context-floor":setViewFloor(menuTarget.buildingId);break;
  case "context-leasing":panelOpen("leasing");break;
  case "context-road":case "context-parking":case "context-office":{
-  const type=name.replace("context-","");res=S.place(state,type,menuTarget.x,menuTarget.y);choice(res.ok,res.message||"Bauobjekt platziert.");refresh();break;
+  const type=name.replace("context-","");const p=S.preview(state,type,menuTarget.x,menuTarget.y,ui.rotation);if(!p.ok){notify(p.message,true);break;}checkpoint();res=S.place(state,type,menuTarget.x,menuTarget.y,ui.rotation);choice(res.ok,res.message||"Bauobjekt platziert.");refresh();break;
  }
  case "floor-door":ui.tool="door";floorClick({clientX:menuTarget.x+canvas.getBoundingClientRect().left,clientY:menuTarget.y+canvas.getBoundingClientRect().top});break;
  case "floor-remove":ui.tool="erase";floorClick({clientX:menuTarget.x+canvas.getBoundingClientRect().left,clientY:menuTarget.y+canvas.getBoundingClientRect().top});break;
