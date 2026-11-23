@@ -504,8 +504,8 @@
     x1=Math.round(x1);y1=Math.round(y1);x2=Math.round(x2);y2=Math.round(y2);
     if(x1!==x2&&y1!==y2)return {ok:false,message:"Wände müssen gerade verlaufen"};
     let count=0;
-    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.windows)delete f.windows[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
-    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
+    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows||(!validCell(f,x-1,y)&&!validCell(f,x,y)))continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.windows)delete f.windows[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
+    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols||(!validCell(f,x,y-1)&&!validCell(f,x,y)))continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     return {ok:count>0,message:count?"":"Keine Segmente ausgewählt"};
   }
   function toggleDoor(s,bid,level,edge){
@@ -528,7 +528,7 @@
     const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],material=FLOOR_FINISHES[finish];
     if(!f)return {ok:false,message:"Etage nicht vorhanden"};
     x=Number(x);y=Number(y);
-    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=f.cols||y>=f.rows)return {ok:false,message:"Bodenfeld außerhalb der Etage"};
+    if(!Number.isInteger(x)||!Number.isInteger(y)||!validCell(f,x,y))return {ok:false,message:"Bodenfeld außerhalb des Gebäudegrundrisses"};
     if(!material)return {ok:false,message:"Bodenbelag unbekannt"};
     const k=key(x,y);
     if(f.floorFinishes&&f.floorFinishes[k]===finish)return {ok:false,message:"Bodenbelag ist bereits ausgewählt"};
@@ -539,7 +539,7 @@
     return {ok:true,cost:material.cost,finish};
   }
   function paint(s,bid,level,x,y,type){
-    const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!f||x<0||y<0||x>=f.cols||y>=f.rows||!FLOOR_TYPES[type])return {ok:false,message:"Ungültiger Raum"};
+    const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!FLOOR_TYPES[type]||!validCell(f,x,y))return {ok:false,message:"Ungültiger Raum oder außerhalb des Gebäudegrundrisses"};
     f.tiles[key(x,y)]=type;return {ok:true};
   }
   function putItem(s,bid,level,x,y,type){
