@@ -27,7 +27,7 @@ jobs:
       - name: Publish Windows EXE as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Industrial-Park-Windows-v1.1
+          name: Industrial-Park-Windows-v1.2
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 30
