@@ -65,7 +65,7 @@ const floorTools=[
  ["floorfinish:concrete","▨","Betonboden"],["floorfinish:vinyl","▥","Vinyl"],["floorfinish:epoxy","▣","Epoxid"]
 ];
 const catalogGroups=[
- ["alle","Alle"],["sets","Komplettsets"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
+ ["alle","Alle"],["räume","Raumnutzung"],["wände","Wandgestaltung"],["böden","Bodenbeläge"],["sets","Komplettsets"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
  ["brandschutz","Brandschutz"],["technik","Gebäudetechnik"],["sanitär","Sanitär"],["lager","Lager"],
  ["industrie","Industrie"],["deko","Dekoration"],["türen","Türen"],["fenster","Fenster"],["zonen","Zonen"]
 ];
@@ -86,6 +86,12 @@ function zonesPanel(){
 function catalogPanel(){
  const category=ui.catalogCategory,query=ui.catalogSearch.trim().toLocaleLowerCase("de-DE");
  const items=[
+  ...Object.entries(S.FLOOR_TYPES).map(([id,name])=>({id,category:"räume",name,tool:"room:"+id,
+    description:"Räume im Grundriss per Ziehen gestalten",price:0,variants:[],feature:"Raumnutzung"})),
+  ...Object.entries(S.WALL_FINISHES).map(([id,w])=>({id,category:"wände",name:w.name,tool:"finish:"+id,
+    description:"Wandsegment · "+euros(w.cost),price:w.cost,variants:[],feature:"Wandoberfläche"})),
+  ...Object.entries(S.FLOOR_FINISHES).map(([id,mat])=>({id,category:"böden",name:mat.name,tool:"floorfinish:"+id,
+    description:"1 m² · "+euros(mat.cost),price:mat.cost,variants:[],feature:"Bodenbelag"})),
   ...Object.entries(S.FURNITURE_SETS).map(([id,a])=>({id,category:"sets",name:a.name,tool:"set:"+id,
     description:a.pieces.length+" einzelne Möbel · "+euros(a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0)),
     price:a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0),variants:[],feature:"Vorlage"})),
@@ -473,7 +479,7 @@ function act(name,element){
  case "open-catalog":panelOpen("catalog");break;
  case "open-zones":panelOpen("zones");break;
  case "catalog-filter":ui.catalogCategory=id;updatePanel();break;
- case "catalog-select":ui.tool=element.dataset.tool;ui.assetVariant=element.dataset.variant||null;closePanel();refresh();notify("Ausgewählt: "+(S.ASSET_INDEX[ui.tool.slice(6)]?.name||ui.tool)+". Auf der Etage platzieren.");break;
+ case "catalog-select":ui.tool=element.dataset.tool;ui.assetVariant=element.dataset.variant||null;if(ui.tool.startsWith("zone:"))ui.zoneFilter=true;closePanel();refresh();notify("Ausgewählt: "+(S.ASSET_INDEX[ui.tool.slice(6)]?.name||ui.tool)+". Auf der Etage platzieren.");break;
  case "cancel-sketch":ui.sketch=null;ui.dragBuild=null;refresh();notify("Bauentwurf verworfen.");break;
  case "review-footprint":{
    if(!ui.sketch||ui.sketch.cells.length<2){notify("Ziehe zunächst mindestens zwei Baufelder auf.",true);break;}
