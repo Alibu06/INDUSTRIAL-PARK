@@ -47,6 +47,18 @@ Die Innenansicht öffnet jetzt standardmäßig in **isometrischem 2,5D**. Du sie
 
 Die Grafiken sind derzeit prozedural erzeugte 2D- und 2,5D-Darstellungen, keine fotorealistischen 3D-Objekte.
 
+## Construction Studio – Baueditor v1.2 (erste Ausbaustufe)
+
+- **Freie Gebäudegrundrisse:** Auf der Parkkarte einen Gebäudetyp wählen und mit der Maus Flächen aufziehen. Mit weiteren Zügen angrenzende Flächen hinzufügen, mit **Umschalt + Ziehen** Teile entfernen. L- und U-Formen einschließlich Innenhöfen werden unterstützt. Anschließend **Angebote einholen** und einen Bauunternehmer beauftragen. Jede Karte misst 4 × 4 m; die Kosten berücksichtigen die tatsächliche Fläche. Nur zusammenhängende Grundrisse sind erlaubt.
+- **Baukatalog:** Im Gebäudeeditor **Alle Objekte** wählen. Eine vollflächige Suche und Filter zeigen Möbel, Einrichtungssets, IT & Netzwerk, CCTV/Zutritt, Brandschutz, Sanitär, Technik, Lager, Industrie, Türen, Fenster, Bodenbeläge, Wandfarben und Raumzonen. Das Katalogobjekt auswählen, zurück in der 2,5D-Ansicht anklicken und mit **R** bei Bedarf drehen.
+- **Reale Größen:** Die 90 Produktmodelle besitzen eigene Maße (in Metern) und Preise. Das Platzieren rastet auf 25 cm ein, und Möbel nehmen unterschiedliche Flächen ein. Ein Computer kann auf einem Schreibtisch stehen. Arbeitsplätze und Konferenztische sind außerdem als **Komplettsets** erhältlich.
+- **Bauteilvarianten:** Acht Türmodelle einschließlich T30/T90, Sicherheitstür, Glas- und Schiebetür; sechs Fenstertypen einschließlich Sicherheitsverglasung. Fenster benötigen eine Außenwand; Doppeltüren nehmen die passende Anzahl von Wandsegmenten ein.
+- **Sicherheitskatalog:** Dome-, Bullet-, Turret- und PTZ-Kameras, Einbruchmelder, Zutrittsleser, Gegensprechstellen, Brandmeldezentralen, Rauch- und Wärmemelder, Sprinkler, Feuerlöscher, Notbeleuchtung und Fluchtwegbeschilderung. Kameramodelle erhalten verschiedene technische Stammdaten; ein komplettes Alarm- und Sichtfeldsystem folgt in einer späteren Ausbaustufe.
+- **IT:** All-in-One-Computer im iMac-Stil, Laptops, Netzwerkracks, Server, Switches, Firewall, Router, WLAN-Access-Points, Repeater, USV, Drucker und Dosen. **Verkabelung, WLAN-Abdeckung und tatsächliche Netzwerkverbindungen sind noch nicht durchgehend simuliert.**
+- **Funktionszonen:** Im Baukatalog Zonen wie Büro, Besprechung, Sanitär, Serverraum oder Lager auswählen und Flächen bemalen. Normalerweise sind diese unsichtbar; per **Zonenfilter** erscheinen transparente Farben mit Bezeichnungen. Über **Raumprüfung** werden bisher grundlegende Ausstattungsanforderungen ausgewertet.
+
+**Einschränkungen:** Die dargestellten Objekte sind derzeit stilisierte, im Canvas gezeichnete 2,5D-Grafiken und noch keine vollständig modellierte Premium-Asset-Bibliothek. Möbelplatzierung ist bereits maßbasiert, aber Feinheiten wie echte Kollisions- und Zugangswege, genaue Montagehöhen, Verkabelung und Bauaufträge für sämtliche Innenausbauarbeiten sind noch in Entwicklung. Die Innenausstattung wird derzeit direkt gekauft und platziert, statt von der beim Rohbau beauftragten Firma zeitverzögert eingebaut zu werden.
+
 ## Verwaltung und Gameplay
 
 Alle Verwaltungsmodule öffnen sich **vollflächig** statt als schmales rechtes Menü: Flächen, Bauaufträge, Objekte, Vermietung, Firmen, Betrieb, Verkehr, Finanzen und Meldungen.
