@@ -12,6 +12,15 @@
     service:{name:"Betriebszentrale",w:4,h:3,cost:195000,days:9,levels:2,color:"#829ba7",monthly:1150,unit:"Verwaltung"}
   };
   const FLOOR_TYPES = {office:"Büro",meeting:"Besprechung",hall:"Lager",workshop:"Werkstatt",kitchen:"Küche",bath:"Sanitär",lobby:"Empfang",corridor:"Flur",server:"Serverraum",break:"Pausenraum"};
+  const WALL_FINISHES = {
+    white:{name:"Warmweiß",color:"#e9e8df",cost:42},
+    beige:{name:"Sandbeige",color:"#d9c2aa",cost:55},
+    navy:{name:"Navyblau",color:"#304c65",cost:68},
+    sage:{name:"Salbeigrün",color:"#95ad9c",cost:60},
+    concrete:{name:"Sichtbeton",color:"#98a1a4",cost:85},
+    brick:{name:"Klinker",color:"#aa7561",cost:110},
+    glass:{name:"Glastrennwand",color:"#a0cad7",cost:260}
+  };
   const ITEM_TYPES = {
     desk:{name:"Schreibtisch",cost:430},
     chair:{name:"Bürostuhl",cost:160},
@@ -46,7 +55,10 @@
   function addMessage(s,title,body,level){s.messages.unshift({id:id(s,"MSG"),date:s.clock.slice(0,10),title,body,level:level||"info"});s.messages=s.messages.slice(0,65);}
   function floorFor(b,idx){
     const kind=b.type==="warehouse"?"hall":b.type==="workshop"?"workshop":b.type==="cafe"?"kitchen":"office";
-    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},items:[]};
+    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},wallFinishes:{},items:[]};
+    // Complete shell: each exterior wall is also an individually editable segment.
+    for(let x=0;x<f.cols;x++){f.walls["H:"+x+":0"]=1;f.walls["H:"+x+":"+f.rows]=1;}
+    for(let y=0;y<f.rows;y++){f.walls["V:0:"+y]=1;f.walls["V:"+f.cols+":"+y]=1;}
     for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)f.tiles[key(x,y)]=kind;
     return f;
   }
@@ -300,13 +312,25 @@
     x1=Math.round(x1);y1=Math.round(y1);x2=Math.round(x2);y2=Math.round(y2);
     if(x1!==x2&&y1!==y2)return {ok:false,message:"Wände müssen gerade verlaufen"};
     let count=0;
-    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];}else{f.walls[k]=1;}count++;}}
+    if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];}else{f.walls[k]=1;}count++;}}
     return {ok:count>0,message:count?"":"Keine Segmente ausgewählt"};
   }
   function toggleDoor(s,bid,level,edge){
     const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!f||!f.walls[edge])return {ok:false,message:"Setze zunächst eine Wand"};
     if(f.doors[edge])delete f.doors[edge];else f.doors[edge]=1;return {ok:true};
+  }
+  function finishWall(s,bid,level,edge,finish){
+    const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level],material=WALL_FINISHES[finish];
+    if(!f)return {ok:false,message:"Etage fehlt"};
+    if(!material)return {ok:false,message:"Unbekannte Wandoberfläche"};
+    if(!f.walls[edge])return {ok:false,message:"Zuerst eine Wand setzen"};
+    if(f.wallFinishes&&f.wallFinishes[edge]===finish)return {ok:false,message:"Diese Wand besitzt bereits die Oberfläche"};
+    if(s.cash<material.cost)return {ok:false,message:"Nicht genug Kapital für die Wandgestaltung"};
+    s.cash-=material.cost;
+    if(!f.wallFinishes)f.wallFinishes={};
+    f.wallFinishes[edge]=finish;
+    return {ok:true,cost:material.cost,finish};
   }
   function paint(s,bid,level,x,y,type){
     const b=s.buildings.find(x=>x.id===bid),f=b&&b.floors[level];if(!f||x<0||y<0||x>=f.cols||y>=f.rows||!FLOOR_TYPES[type])return {ok:false,message:"Ungültiger Raum"};
@@ -440,5 +464,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
