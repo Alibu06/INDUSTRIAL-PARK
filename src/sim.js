@@ -192,15 +192,24 @@
   function addMessage(s,title,body,level){s.messages.unshift({id:id(s,"MSG"),date:s.clock.slice(0,10),title,body,level:level||"info"});s.messages=s.messages.slice(0,65);}
   function floorFor(b,idx){
     const kind=b.type==="warehouse"?"hall":b.type==="workshop"?"workshop":b.type==="cafe"?"kitchen":"office";
-    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},windows:{},zones:{},wallFinishes:{},floorFinishes:{},items:[]};
-    // Complete shell: each exterior wall is also an individually editable segment.
-    for(let x=0;x<f.cols;x++){f.walls["H:"+x+":0"]=1;f.walls["H:"+x+":"+f.rows]=1;}
-    for(let y=0;y<f.rows;y++){f.walls["V:0:"+y]=1;f.walls["V:"+f.cols+":"+y]=1;}
-    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)f.tiles[key(x,y)]=kind;
+    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},windows:{},zones:{},wallFinishes:{},floorFinishes:{},items:[],mask:null};
+    const built=new Set();
+    if(b.shape&&b.shape.length){
+      for(const [cx,cy] of b.shape)for(let yy=0;yy<4;yy++)for(let xx=0;xx<4;xx++)built.add(key(cx*4+xx,cy*4+yy));
+      f.mask=[...built];
+    }else for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++)built.add(key(x,y));
+    for(const k of built){
+      const [x,y]=k.split(",").map(Number);f.tiles[k]=kind;
+      if(!built.has(key(x,y-1)))f.walls["H:"+x+":"+y]=1;
+      if(!built.has(key(x,y+1)))f.walls["H:"+x+":"+(y+1)]=1;
+      if(!built.has(key(x-1,y)))f.walls["V:"+x+":"+y]=1;
+      if(!built.has(key(x+1,y)))f.walls["V:"+(x+1)+":"+y]=1;
+    }
     return f;
   }
-  function makeBuilding(s,type,x,y,ready,rotation=0){
+  function makeBuilding(s,type,x,y,ready,rotation=0,custom=null){
     const t=TYPES[type],swapped=Math.abs(rotation)%2===1; const b={id:id(s,"B"),name:t.name+" "+String.fromCharCode(65+s.buildings.length),type,x,y,w:swapped?t.h:t.w,h:swapped?t.w:t.h,rotation:swapped?1:0,condition:88,construction:ready?0:t.days,levels:t.levels,floors:[],tenantId:null};
+    if(custom&&custom.length){const xs=custom.map(p=>p.x),ys=custom.map(p=>p.y);const minX=Math.min(...xs),minY=Math.min(...ys),maxX=Math.max(...xs),maxY=Math.max(...ys);b.x=minX;b.y=minY;b.w=maxX-minX+1;b.h=maxY-minY+1;b.shape=custom.map(p=>[p.x-minX,p.y-minY]);b.custom=true;}
     for(let i=0;i<t.levels;i++)b.floors.push(floorFor(b,i));
     s.buildings.push(b);return b;
   }
@@ -276,11 +285,11 @@
     if(count<5&&s.projects.some(p=>p.status==="bau"&&p.contractorId==="eigen"))return {ok:false,message:"Laufende Bauaufträge benötigen mindestens fünf Bauarbeiter"};
     s.constructionDept.workers=count;return {ok:true};
   }
-  function getQuotes(s,tool,quantity=1){
+  function getQuotes(s,tool,quantity=1,customSize=0){
     const count=Math.max(1,Math.floor(quantity));
-    const base=(TYPES[tool]?TYPES[tool].cost:(SITE_COSTS[tool]||0)*count);
+    const base=(TYPES[tool]?Math.round(TYPES[tool].cost*(customSize||TYPES[tool].w*TYPES[tool].h)/(TYPES[tool].w*TYPES[tool].h)):(SITE_COSTS[tool]||0)*count);
     if(!base)return [];
-    const baseDays=TYPES[tool]?TYPES[tool].days:Math.max(1,Math.ceil(count/5));
+    const baseDays=TYPES[tool]?Math.max(3,Math.ceil(TYPES[tool].days*Math.sqrt((customSize||TYPES[tool].w*TYPES[tool].h)/(TYPES[tool].w*TYPES[tool].h)))):Math.max(1,Math.ceil(count/5));
     const external=CONTRACTORS.map(c=>({...c,price:Math.round(base*c.factor),days:Math.max(1,Math.ceil(baseDays*c.speed)),own:false,available:true}));
     const own=s.constructionDept.active?[{
       id:"eigen",name:"Eigener Baubetrieb",description:"Eigenes Personal, Maschinen und Betriebshof",
@@ -294,7 +303,7 @@
     const tool=plan.tool,isBuilding=!!TYPES[tool],points=[];
     let check;
     if(isBuilding){
-      check=preview(s,tool,plan.x,plan.y,plan.rotation||0);
+      check=plan.cells&&plan.cells.length?previewFootprint(s,tool,plan.cells):preview(s,tool,plan.x,plan.y,plan.rotation||0);
       if(!check.ok)return {ok:false,message:check.message};
     }else{
       if(!(tool in SITE_COSTS))return {ok:false,message:"Unbekannter Baubereich"};
@@ -309,14 +318,14 @@
         if(!check.ok)return {ok:false,message:"Bauzug nicht möglich bei "+p.x+"/"+p.y+": "+check.message};
       }
     }
-    const q=getQuotes(s,tool,isBuilding?1:points.length).find(x=>x.id===contractorId);
+    const q=getQuotes(s,tool,isBuilding?1:points.length,isBuilding&&plan.cells?check.cells.length:0).find(x=>x.id===contractorId);
     if(!q)return {ok:false,message:"Bitte einen vorhandenen Bauunternehmer auswählen"};
     if(!q.available)return {ok:false,message:"Eigene Baukolonne derzeit nicht verfügbar"};
     if(s.cash<q.price)return {ok:false,message:"Finanzierung reicht für dieses Angebot nicht aus"};
     s.cash-=q.price;
     let building=null;
     if(isBuilding){
-      building=makeBuilding(s,tool,check.x,check.y,false,plan.rotation||0);
+      building=makeBuilding(s,tool,check.x,check.y,false,plan.rotation||0,plan.cells?check.cells:null);
       building.construction=q.days;
       building.condition=q.quality;
       building.contractorId=q.id;
@@ -383,6 +392,40 @@
       (road||park||tree?"Fläche ist bereits belegt":"");
     return {ok:!err&&s.cash>=SITE_COSTS[tool],x,y,w:1,h:1,cost:SITE_COSTS[tool],
       message:err|| (s.cash<Math.round(SITE_COSTS[tool]*.94)?"Zu wenig Kapital":"Baufeld frei")};
+  }
+  function previewFootprint(s,tool,cells){
+    if(!TYPES[tool])return {ok:false,message:"Gebäudetyp nicht bekannt"};
+    const unique=new Map();
+    for(const p of cells||[]){
+      const x=Math.floor(p.x),y=Math.floor(p.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y))return {ok:false,message:"Baupunkt nicht gültig"};
+      unique.set(key(x,y),{x,y});
+    }
+    const shape=[...unique.values()];
+    if(shape.length<2)return {ok:false,message:"Mindestens zwei Baufelder (32 m²) zeichnen"};
+    if(shape.length>180)return {ok:false,message:"Maximal 2.880 m² je Bauprojekt"};
+    const set=new Set(unique.keys()),visited=new Set([key(shape[0].x,shape[0].y)]),queue=[shape[0]];
+    for(let i=0;i<queue.length;i++){
+      const p=queue[i];for(const [dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+        const k=key(p.x+dx,p.y+dy);
+        if(set.has(k)&&!visited.has(k)){visited.add(k);queue.push({x:p.x+dx,y:p.y+dy});}
+      }
+    }
+    if(visited.size!==shape.length)return {ok:false,message:"Baufläche muss zusammenhängend sein"};
+    for(const p of shape){
+      if(!isOwned(s,p.x,p.y))return {ok:false,message:"Baufeld liegt außerhalb gekaufter Grundstücke"};
+      const k=key(p.x,p.y);
+      if(s.roads.includes(k)||s.publicRoads.includes(k)||s.parking.includes(k))return {ok:false,message:"Baufläche überschneidet Zufahrt, Straße oder Parkplatz"};
+      if(s.projects.some(t=>t.status==="bau"&&t.points.some(q=>q.x===p.x&&q.y===p.y)))return {ok:false,message:"Baufeld bereits reserviert"};
+      if(s.buildings.some(b=>{
+        if(b.shape)return b.shape.some(([xx,yy])=>b.x+xx===p.x&&b.y+yy===p.y);
+        return p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h;
+      }))return {ok:false,message:"Baufeld ist bereits bebaut"};
+    }
+    const t=TYPES[tool],baseCost=Math.round(t.cost*shape.length/(t.w*t.h)),cost=Math.round(baseCost*.94);
+    return {ok:s.cash>=cost,message:s.cash>=cost?"Baufeld frei":"Nicht genügend Liquidität",cells:shape,
+      x:Math.min(...shape.map(p=>p.x)),y:Math.min(...shape.map(p=>p.y)),w:Math.max(...shape.map(p=>p.x))-Math.min(...shape.map(p=>p.x))+1,
+      h:Math.max(...shape.map(p=>p.y))-Math.min(...shape.map(p=>p.y))+1,cost:baseCost};
   }
   function place(s,tool,x,y,rotation=0){
     const p=preview(s,tool,x,y,rotation);
@@ -693,5 +736,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,ASSETS,ASSET_INDEX,DOOR_MODELS,WINDOW_MODELS,ZONE_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,previewFootprint,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,placeAsset,removeAsset,installOpening,removeOpening,paintZone,zoneReport,validCell,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
