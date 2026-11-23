@@ -521,15 +521,19 @@ canvas.addEventListener("pointerdown",e=>{
  const p=getLocation(e);
  if(e.button===1||(e.button===0&&spaceDown)){
    drag={mode:"pan",x:e.clientX,y:e.clientY,moved:false};
+ }else if(ui.mode==="world"&&S.TYPES[ui.tool]){
+   const h=renderer.hitWorld(p.x,p.y,ui);
+   drag={mode:"sketch",start:h,end:h,remove:e.shiftKey===true,x:e.clientX,y:e.clientY,moved:false};
+   ui.dragBuild=sketchRect(h,h);
  }else if(ui.mode==="world"&&["road","parking","tree"].includes(ui.tool)){
    const h=renderer.hitWorld(p.x,p.y,ui);
    drag={mode:"build",start:h,end:h,x:e.clientX,y:e.clientY,moved:false};
    ui.dragBuild=pathCells(ui.tool,h,h);updateToolStats();
- }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("floorfinish:"))){
+ }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("zone:")||ui.tool.startsWith("floorfinish:"))){
    drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false,changed:0,lastError:""};
    checkpoint();
    const b=building(ui.selectedId),h=b&&renderer.hitFloor(p.x,p.y,ui,b);
-   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
+   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):ui.tool.startsWith("zone:")?S.paintZone(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
  }else{
    drag={mode:"click",x:e.clientX,y:e.clientY,moved:false};
  }
@@ -547,6 +551,9 @@ canvas.addEventListener("pointermove",e=>{
      if(ui.mode==="floor"){ui.cam.floorX+=dx;ui.cam.floorY+=dy;}
      else{ui.cam.panX+=dx;ui.cam.panY+=dy;}
      drag.x=e.clientX;drag.y=e.clientY;
+   }else if(drag.mode==="sketch"){
+     const h=renderer.hitWorld(p.x,p.y,ui);
+     drag.end=h;drag.moved=true;ui.dragBuild=sketchRect(drag.start,h);updateToolStats();
    }else if(drag.mode==="build"){
      const h=renderer.hitWorld(p.x,p.y,ui);
      if(h.x!==drag.end.x||h.y!==drag.end.y){
@@ -557,7 +564,7 @@ canvas.addEventListener("pointermove",e=>{
    }else if(drag.mode==="paint"){
      const h=ui.hoverFloor,b=building(ui.selectedId);
      if(h&&h.inside&&b&&!drag.seen.has(h.x+","+h.y)){
-       const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
+       const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):ui.tool.startsWith("zone:")?S.paintZone(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));
        if(res.ok)drag.changed++;else drag.lastError=res.message;
        drag.seen.add(h.x+","+h.y);drag.moved=true;
      }
@@ -575,6 +582,9 @@ canvas.addEventListener("pointermove",e=>{
 canvas.addEventListener("pointerup",e=>{
  const held=drag;drag=null;pressed=false;
  if(!held||e.button!==0){ui.dragBuild=null;return;}
+ if(held.mode==="sketch"){
+   const cells=ui.dragBuild||sketchRect(held.start,held.end);ui.dragBuild=null;applySketch(ui.tool,cells,held.remove);return;
+ }
  if(held.mode==="build"){
    const points=ui.dragBuild||pathCells(ui.tool,held.start,held.end);
    ui.dragBuild=null;
