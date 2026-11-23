@@ -478,8 +478,9 @@ canvas.addEventListener("pointerdown",e=>{
    ui.dragBuild=pathCells(ui.tool,h,h);updateToolStats();
  }else if(ui.mode==="floor"&&(ui.tool.startsWith("room:")||ui.tool.startsWith("floorfinish:"))){
    drag={mode:"paint",x:e.clientX,y:e.clientY,seen:new Set(),moved:false,changed:0,lastError:""};
+   checkpoint();
    const b=building(ui.selectedId),h=b&&renderer.hitFloor(p.x,p.y,ui,b);
-   if(h&&h.inside){checkpoint();const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
+   if(h&&h.inside){const res=ui.tool.startsWith("floorfinish:")?S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12)):S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(res.ok)drag.changed++;else drag.lastError=res.message;drag.seen.add(h.x+","+h.y);}
  }else{
    drag={mode:"click",x:e.clientX,y:e.clientY,moved:false};
  }
