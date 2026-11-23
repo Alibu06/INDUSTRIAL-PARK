@@ -251,12 +251,41 @@ function factory(canvas){
       drawText(ut.type==="power"?"E":ut.type==="fibre"?"F":"W",p.x,p.y,9*u.cam.zoom,"#fff",true);
     }
   }
-  if(u.hover&&u.tool!=="select"){
-    const x=u.hover.x,y=u.hover.y;
-    if(S.TYPES[u.tool]){
-      const b=S.TYPES[u.tool],pts=[worldP(x,y,0,u),worldP(x+b.w,y,0,u),worldP(x+b.w,y+b.h,0,u),worldP(x,y+b.h,0,u)];
-      polygon(c,pts,"rgba(92,181,190,.25)","#4b91a9",2);
-    }else if(["road","parking","tree","demolish"].includes(u.tool))diamond(x,y,u,"rgba(93,186,190,.35)","#4b91a9");
+  // World light reacts to simulation time. Preview is drawn afterwards so placement stays readable.
+  const lightHour=new Date(s.clock).getUTCHours();
+  if(lightHour>=20||lightHour<6){
+    c.fillStyle=lightHour>=22||lightHour<5?"rgba(20,36,61,.34)":"rgba(25,43,61,.20)";
+    c.fillRect(0,0,cw,ch);
+  }else if(lightHour>=18){c.fillStyle="rgba(205,157,108,.07)";c.fillRect(0,0,cw,ch);}
+  if(u.tool!=="select"){
+    const footprints=u.dragBuild&&u.dragBuild.length?u.dragBuild:u.hover?[u.hover]:[];
+    if(S.TYPES[u.tool]&&u.hover){
+      const p=S.preview(s,u.tool,u.hover.x,u.hover.y,u.rotation||0);
+      const ok=p.ok,color=ok?"#54a99a":"#d67665",soft=ok?"rgba(63,180,149,.33)":"rgba(205,88,75,.32)";
+      const poly=[worldP(p.x,p.y,0,u),worldP(p.x+p.w,p.y,0,u),worldP(p.x+p.w,p.y+p.h,0,u),worldP(p.x,p.y+p.h,0,u)];
+      const z=15+S.TYPES[u.tool].levels*26;
+      const roof=[worldP(p.x,p.y,z,u),worldP(p.x+p.w,p.y,z,u),worldP(p.x+p.w,p.y+p.h,z,u),worldP(p.x,p.y+p.h,z,u)];
+      c.save();polygon(c,poly,soft,color,2.5*u.cam.zoom);
+      polygon(c,[poly[3],poly[2],roof[2],roof[3]],soft,color,1.3);
+      polygon(c,[poly[2],poly[1],roof[1],roof[2]],soft,color,1.3);
+      polygon(c,roof,ok?"rgba(156,236,218,.45)":"rgba(247,175,159,.45)",color,2.6);
+      const mid=worldP(p.x+p.w/2,p.y+p.h/2,z+13,u);
+      const label=(ok?"✓ ":"✕ ")+p.w*4+" × "+p.h*4+" m · "+(p.cost/1000).toLocaleString("de-DE")+" T€";
+      c.font="600 11px Segoe UI,Arial";const width=c.measureText(label).width+26;
+      c.fillStyle=ok?"#1d5b56":"#8c3b33";c.beginPath();c.roundRect(mid.x-width/2,mid.y-14,width,28,8);c.fill();
+      drawText(label,mid.x,mid.y,11,"#f6ffff",true);
+      c.restore();
+    }else{
+      for(const p of footprints){
+        const val=u.tool==="demolish"?{ok:true}:S.preview(s,u.tool,p.x,p.y);
+        diamond(p.x,p.y,u,val.ok?"rgba(55,178,150,.37)":"rgba(223,92,73,.40)",val.ok?"#33ab94":"#d76b5d");
+      }
+      if(footprints.length>1){
+        const last=footprints[footprints.length-1],p=worldP(last.x+.5,last.y+.5,12,u);
+        c.fillStyle="#1e535e";c.beginPath();c.roundRect(p.x-40,p.y-18,80,24,6);c.fill();
+        drawText(footprints.length+" Felder",p.x,p.y-6,10,"#fff",true);
+      }
+    }
   }
  }
  function drawItem(it,p,size,s){
