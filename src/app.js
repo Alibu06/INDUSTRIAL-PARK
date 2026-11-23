@@ -61,19 +61,40 @@ const floorTools=[
 ];
 function updateToolbar(){
  const list=ui.mode==="floor"?floorTools:worldTools;
- $("toolbar").innerHTML=(ui.mode==="floor"?'<button class="toolbtn" data-action="world-view"><span class="toolicon">←</span><small>Außen</small></button><div class="tooldiv"></div>':"")
- +list.map(v=>'<button title="'+esc(v[2])+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
+ let markup='<button class="toolbtn" data-action="'+(ui.mode==="floor"?"world-view":"open-buildings")+'" title="'+(ui.mode==="floor"?"Zurück zum Park":"Objektverwaltung")+'"><span class="toolicon">'+(ui.mode==="floor"?"←":"▤")+'</span><small>'+(ui.mode==="floor"?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
+ const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
+ for(const group of groups){
+   markup+='<span class="tool-category">'+group[0]+'</span>';
+   markup+=list.slice(group[1],group[2]).map(v=>'<button title="'+esc(v[2])+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
+ }
+ if(ui.mode==="world")markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="rotate-build" title="Gebäude drehen (R)"><span class="toolicon">⟳</span><small>Drehen</small></button>';
+ markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" title="Rückgängig (Strg+Z)" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" title="Wiederherstellen (Strg+Y)" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
+ $("toolbar").innerHTML=markup;
+}
+function updateToolStats(){
+ const target=$("toolStats");if(!target)return;
+ if(ui.mode==="floor"){
+   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
+   target.textContent=f?f.label+" · "+f.cols+" × "+f.rows+" m · "+Object.keys(f.walls).length+" Wandsegmente · "+f.items.length+" Objekte":"";
+   return;
+ }
+ const m=S.metrics(state),dragCells=ui.dragBuild;
+ if(dragCells&&dragCells.length){
+   const cost=dragCells.filter(p=>S.preview(state,ui.tool,p.x,p.y).ok).length*({road:9000,parking:4400,tree:750}[ui.tool]||0);
+   target.textContent="Bauzug · "+dragCells.length+" Felder · voraussichtlich "+euros(cost)+" · Maustaste loslassen";
+ }else target.textContent=state.buildings.length+" Immobilien · "+m.jobs+" Beschäftigte · "+m.parking+" Parkplätze · "+(ui.rotation?"Gebäude 90° gedreht":"Maßstab: 1 Feld = 4 Meter");
 }
 function updateMapInfo(){
  let contents="";
  if(ui.mode==="world"){
   if(ui.selectedId&&building(ui.selectedId)){
    const b=building(ui.selectedId),c=company(b.tenantId);
-   contents='<div class="info-card"><span class="kicker">OBJEKT AUSGEWÄHLT · '+esc(b.id)+'</span><b>'+esc(b.name)+'</b><p>'+esc(c?c.name:"Noch kein Mieter")+' · '+(b.w*4*b.h*4*b.levels)+' m² · '+esc(b.floors.length)+" Etage(n)"+'</p><button data-action="floor-view">Innenräume bearbeiten →</button></div>';
+   contents='<div class="info-card"><span class="kicker">OBJEKT AUSGEWÄHLT · '+esc(b.id)+'</span><b>'+esc(b.name)+'</b><p>'+esc(c?c.name:"Noch kein Mieter")+' · '+(b.w*4*b.h*4*b.levels)+' m² · '+esc(b.floors.length)+" Etage(n)"+'</p><button data-action="floor-view">Innenausbau →</button> <button data-action="property-details">Objektdaten</button></div>';
   }else if(ui.tool!=="select"){
    const tool=worldTools.find(t=>t[0]===ui.tool);
    let cost=S.TYPES[ui.tool]?S.TYPES[ui.tool].cost:({road:9000,parking:4400,tree:750})[ui.tool];
-   contents='<div class="info-card"><span class="kicker">BAUMODUS AKTIV</span><b>'+esc(tool?tool[2]:"Bauen")+'</b><p>Auf der Karte platzieren.'+(cost?" Einmalige Kosten: "+euros(cost):"")+'</p></div>';
+   const p=ui.hover&&S.preview(state,ui.tool,ui.hover.x,ui.hover.y,ui.rotation);
+   contents='<div class="info-card"><span class="kicker">BAUMODUS AKTIV</span><b>'+esc(tool?tool[2]:"Bauen")+'</b><p>'+(S.TYPES[ui.tool]?"Grundfläche: "+(p?p.w:S.TYPES[ui.tool].w)*4+" × "+(p?p.h:S.TYPES[ui.tool].h)*4+" m · R zum Drehen":"Klicken oder Fläche mit der Maus aufziehen")+(cost?" · Kosten: "+euros(cost):"")+'</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+(p.ok?"✓ ":"⚠ ")+esc(p.message)+(p.ok&&!p.roadAccess&&S.TYPES[ui.tool]?" · Zufahrt prüfen":"")+'</div>':"")+'</div>';
   }else contents='<div class="info-card"><span class="kicker">STANDORTÜBERSICHT</span><b>AM Gewerbepark</b><p>Wähle ein Gebäude oder beginne mit einem Bauprojekt. Alle Unternehmen arbeiten eigenständig weiter.</p></div>';
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
@@ -188,9 +209,9 @@ function updatePanel(){
  const sections={property:["Immobilienobjekt",propertyPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
  const section=sections[ui.nav]||sections.buildings;$("panelTitle").textContent=section[0];$("panelBody").innerHTML=section[1]();
 }
-function refresh(){redrawHUD();updateToolbar();updateMapInfo();updatePanel();}
+function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats();updatePanel();}
 function resizeSoon(){setTimeout(()=>renderer.resize(),30);}
-function toolAction(tool){ui.tool=tool;ui.wallStart=null;updateToolbar();updateMapInfo();}
+function toolAction(tool){ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
 async function saveGame(silent){
  try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v1",data);if(!silent)notify("Spielstand lokal gespeichert.");}
  catch(e){if(!silent)notify("Speichern fehlgeschlagen: "+e.message,true);}
