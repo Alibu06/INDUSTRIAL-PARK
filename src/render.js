@@ -569,7 +569,7 @@ function factory(canvas){
  function floorPlan(s,u,b,f,g){
    const z=g.size;
    c.save();c.shadowColor="rgba(23,50,60,.19)";c.shadowBlur=30;c.shadowOffsetY=12;
-   c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);c.restore();
+   if(!f.mask){c.fillStyle="#fff";c.fillRect(g.x-10,g.y-10,f.cols*z+20,f.rows*z+20);}c.restore();
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
      if(!S.validCell(f,x,y))continue;
      const type=f.tiles[S.key(x,y)]||"office";
@@ -583,7 +583,7 @@ function factory(canvas){
      const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
      const p=floorPoint(g,x,y),q=floorPoint(g,x+(o==="H"?1:0),y+(o==="V"?1:0));
      const paint=wallFinish(f,edge).color;
-     line(c,p,q,f.doors[edge]?"#b48756":paint,Math.max(4,z*.24));
+     line(c,p,q,f.doors[edge]?"#b48756":f.windows&&f.windows[edge]?"#64a8bd":paint,Math.max(4,z*.24));
      if(f.doors[edge]){
        const mid=mix(p,q,.5);
        c.fillStyle="#f5f8f6";c.beginPath();c.arc(mid.x,mid.y,z*.14,0,TAU);c.fill();
@@ -602,11 +602,11 @@ function factory(canvas){
  function drawIsoWall(f,g,edge,highlight){
    const [o,xs,ys]=edge.split(":"),x=Number(xs),y=Number(ys);
    const a=floorPoint(g,x,y),b=floorPoint(g,x+(o==="H"?1:0),y+(o==="V"?1:0));
-   const exterior=(o==="H"&&(y===0||y===f.rows))||(o==="V"&&(x===0||x===f.cols));
-   const near=(o==="H"&&y===f.rows)||(o==="V"&&x===f.cols);
+   const exterior=(o==="H"&&(!S.validCell(f,x,y-1)||!S.validCell(f,x,y)))||(o==="V"&&(!S.validCell(f,x-1,y)||!S.validCell(f,x,y)));
+   const near=(o==="H"&&S.validCell(f,x,y-1)&&!S.validCell(f,x,y))||(o==="V"&&S.validCell(f,x-1,y)&&!S.validCell(f,x,y));
    const height=near?.42:exterior?1.9:1.5;
    const mat=wallFinish(f,edge),glass=(f.wallFinishes&&f.wallFinishes[edge]==="glass");
-   const color=mat.color,door=!!f.doors[edge],z=g.size,matId=(f.wallFinishes&&f.wallFinishes[edge])||"white";
+   const color=mat.color,door=!!f.doors[edge],windowModel=f.windows&&f.windows[edge],z=g.size,matId=(f.wallFinishes&&f.wallFinishes[edge])||"white";
    const drawPart=(start,end,lo,hi)=>{
      if(end<=start||hi<=lo)return;
      const aa=mix(a,b,start),bb=mix(a,b,end);
@@ -643,17 +643,24 @@ function factory(canvas){
      // Swing arc indicates a real doorway instead of a painted rectangle.
      c.strokeStyle="#a78a66";c.lineWidth=1;c.beginPath();
      c.arc(p.x,p.y,z*.46,-Math.PI*.24,Math.PI*.17);c.stroke();
+   }else if(windowModel){
+     drawPart(0,1,0,.39);drawPart(0,1,Math.min(1.37,height*.8),height);
+     drawPart(0,.09,.38,Math.min(1.37,height));drawPart(.91,1,.38,Math.min(1.37,height));
+     const lo=mix(a,b,.08),hi=mix(a,b,.92),rise=Math.min(1.35,height*.9)*z;
+     const pts=[{x:lo.x,y:lo.y-.39*z},{x:hi.x,y:hi.y-.39*z},{x:hi.x,y:hi.y-rise},{x:lo.x,y:lo.y-rise}];
+     polygon(c,pts,windowModel.model==="secure"?"rgba(82,131,153,.55)":"rgba(143,204,219,.34)","#7ea3ae",1.25*z);
+     line(c,{x:lo.x,y:lo.y-(rise+.39*z)/2},{x:hi.x,y:hi.y-(rise+.39*z)/2},"rgba(204,232,235,.82)",1*z);
    }else drawPart(0,1,0,height);
  }
  function isoItem(it,g,s){
-   const z=g.size,x=it.x,y=it.y,p=floorPoint(g,x,y);
+   const z=g.size,x=it.x,y=it.y,w=it.w||1,d0=it.d||1,p=floorPoint(g,x,y);
    const heights={desk:.47,chair:.28,table:.4,shelf:.88,printer:.68,hvac:.8,machine:.95,
      plant:.38,toilet:.31,sink:.48,dispenser:.65,light:.20,camera:.34,
      alarm:.16,sprinkler:.12,reader:.38,pallet:.20};
-   const h=heights[it.type]||.42;
+   const h=Math.min(2.5,it.h||heights[it.type]||.42);
    const ztop=h*z;
-   const a=floorPoint(g,x+.13,y+.13),b=floorPoint(g,x+.87,y+.13),
-     d=floorPoint(g,x+.87,y+.87),e=floorPoint(g,x+.13,y+.87);
+   const a=floorPoint(g,x+.06*w,y+.06*d0),b=floorPoint(g,x+.94*w,y+.06*d0),
+     d=floorPoint(g,x+.94*w,y+.94*d0),e=floorPoint(g,x+.06*w,y+.94*d0);
    const lift=q=>({x:q.x,y:q.y-ztop});
    const tone=it.type==="desk"||it.type==="table"?"#93785d":"#8599a0";
    polygon(c,[e,d,lift(d),lift(e)],tone,"rgba(45,65,74,.23)",.4);
@@ -662,18 +669,28 @@ function factory(canvas){
    const top=floorPoint(g,x,y,h);
    c.save();c.translate(top.x,top.y);
    c.transform(1,.5,-1,.5,0,0);
+   c.scale(Math.min(3,w),Math.min(2.5,d0));
    drawItem(it,{x:0,y:0},z,s);
    c.restore();
  }
  function floorIso(s,u,b,f,g){
-   const a=floorPoint(g,0,0),bb=floorPoint(g,f.cols,0),
-     d=floorPoint(g,f.cols,f.rows),e=floorPoint(g,0,f.rows);
-   const down=p=>({x:p.x,y:p.y+g.size*.54});
-   c.save();c.shadowColor="rgba(25,47,59,.16)";c.shadowBlur=26;c.shadowOffsetY=12;
-   polygon(c,[e,d,down(d),down(e)],"#bac4c7");c.restore();
-   polygon(c,[e,d,down(d),down(e)],"#a9b6ba","#93a7af",1);
-   polygon(c,[bb,d,down(d),down(bb)],"#8f9fa7","#8699a4",1);
-   polygon(c,[a,bb,d,e],"#d7d9d6","#708a96",1.3);
+   if(f.mask){
+     for(const cell of f.mask){
+       const [x,y]=cell.split(",").map(Number),a=floorPoint(g,x,y),b=floorPoint(g,x+1,y),
+         d=floorPoint(g,x+1,y+1),e=floorPoint(g,x,y+1),drop=p=>({x:p.x,y:p.y+g.size*.54});
+       if(!S.validCell(f,x+1,y))polygon(c,[b,d,drop(d),drop(b)],"#91a4ad","#718b99",.6);
+       if(!S.validCell(f,x,y+1))polygon(c,[e,d,drop(d),drop(e)],"#aab9bd","#8d9fa8",.6);
+     }
+   }else{
+     const a=floorPoint(g,0,0),bb=floorPoint(g,f.cols,0),
+       d=floorPoint(g,f.cols,f.rows),e=floorPoint(g,0,f.rows);
+     const down=p=>({x:p.x,y:p.y+g.size*.54});
+     c.save();c.shadowColor="rgba(25,47,59,.16)";c.shadowBlur=26;c.shadowOffsetY=12;
+     polygon(c,[e,d,down(d),down(e)],"#bac4c7");c.restore();
+     polygon(c,[e,d,down(d),down(e)],"#a9b6ba","#93a7af",1);
+     polygon(c,[bb,d,down(d),down(bb)],"#8f9fa7","#8699a4",1);
+     polygon(c,[a,bb,d,e],"#d7d9d6","#708a96",1.3);
+   }
    for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
      if(!S.validCell(f,x,y))continue;
      const type=f.tiles[S.key(x,y)]||"office";
@@ -683,6 +700,15 @@ function factory(canvas){
      floorDetail(g,x,y,surface.pattern);
      if(x%4===0&&y%4===0&&g.size>12){
        line(c,floorPoint(g,x+.14,y+.5),floorPoint(g,x+.32,y+.5),"rgba(88,107,112,.13)",.45);
+     }
+   }
+   if(u.zoneFilter&&f.zones){
+     for(let y=0;y<f.rows;y++)for(let x=0;x<f.cols;x++){
+       const zone=f.zones[S.key(x,y)],info=S.ZONE_TYPES[zone];
+       if(!info)continue;
+       const poly=[floorPoint(g,x,y,.04),floorPoint(g,x+1,y,.04),floorPoint(g,x+1,y+1,.04),floorPoint(g,x,y+1,.04)];
+       polygon(c,poly,info.color+"88",info.color,1);
+       if((x+y)%4===0&&g.size>10){const p=floorPoint(g,x+.5,y+.5,.07);drawText(info.name,p.x,p.y,Math.min(11,g.size*.46),"#365262",true);}
      }
    }
    const drawing=[];
