@@ -40,8 +40,9 @@ Die Innenansicht öffnet jetzt standardmäßig in **isometrischem 2,5D**. Du sie
 - Auf eine Wand klicken, um eine Tür zu setzen.
 - Raumtyp mit Ziehen auf mehrere Felder auftragen.
 - Ausstattung je einzelnem Raumfeld platzieren.
-- **Jedes Wandsegment einzeln gestalten:** Warmweiß, Beige, Navy, Salbei, Sichtbeton, Klinker und Glastrennwände, mit Kosten.
-- Über Ansichtsumschalter zwischen **2,5D-Innenraum** und **2D-Bauplan** wechseln. Beides sind Ansichten derselben Gebäudedaten.
+- **Jedes Wandsegment einzeln gestalten:** Warmweiß, Beige, Navy, Salbei, Sichtbeton, Klinker, Eichenpaneele, Anthrazit und Glastrennwände. Die Wände haben echte sichtbare Flächen und Materialdetails; jeder Anstrich kostet Geld.
+- **Bodenbeläge pro Quadratmeter:** Teppich, Eichenparkett, Feinsteinzeug, Industriebeton, Vinyl und Epoxidharz. Per Klick oder Ziehen verlegen, die Materialkosten werden unmittelbar berechnet und im lokalen Spielstand gespeichert.
+- Über den Ansichtsumschalter zwischen **2,5D-Innenraum** und **2D-Bauplan** wechseln. Beides sind Ansichten derselben Gebäudedaten. Die vorderen Wände sind als Cutaway sichtbar, um Möbel und andere Räume einzusehen.
 - Änderungen rückgängig mit Strg+Z, wiederholen mit Strg+Y.
 
 Die Grafiken sind derzeit prozedural erzeugte 2D- und 2,5D-Darstellungen, keine fotorealistischen 3D-Objekte.
@@ -56,7 +57,7 @@ Mieter mit eigener Wirtschaftsentwicklung, Monatsmieten, Cashflow, Personal, tec
 
 ## Projektstruktur
 
-- src/sim.js — Simulationszustand, Grundstücke, Bauvergabe, Wirtschaft, Wandfarben.
+- src/sim.js — Simulationszustand, Grundstücke, Bauvergabe, Wirtschaft, Wand- und Bodenmaterialien.
 - src/render.js — Gewerbepark, Straßen, Gebäude, 2,5D-Schnittansicht, 2D-Bauplan.
 - src/app.js — Bedienung, Werkzeugleisten, Bauangebote, Verwaltung, lokale Spielstände.
 - src/style.css und src/v11.css — UI.
