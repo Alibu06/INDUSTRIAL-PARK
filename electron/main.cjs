@@ -2,7 +2,7 @@
 const {app,BrowserWindow,ipcMain,session}=require("electron");
 const path=require("node:path");
 const fs=require("node:fs/promises");
-const savePath=()=>path.join(app.getPath("userData"),"industrial-park-v1.json");
+const savePath=()=>path.join(app.getPath("userData"),"industrial-park-v2.json");
 async function createWindow(){
  const win=new BrowserWindow({width:1540,height:960,minWidth:920,minHeight:640,show:false,
  backgroundColor:"#e4eeeb",title:"INDUSTRIAL PARK",autoHideMenuBar:true,
@@ -19,7 +19,7 @@ app.whenReady().then(()=>{
  });
  ipcMain.handle("industrial-save",async(_event,raw)=>{
  if(typeof raw!=="string"||raw.length>15000000)throw Error("Ungültiger Spielstand");
- const data=JSON.parse(raw);if(data.version!==1||!Array.isArray(data.buildings))throw Error("Ungültiges Format");
+ const data=JSON.parse(raw);if(data.version!==2||!Array.isArray(data.buildings))throw Error("Ungültiges Format");
  await fs.mkdir(app.getPath("userData"),{recursive:true});
  const dst=savePath(),tmp=dst+".tmp";await fs.writeFile(tmp,raw,"utf-8");await fs.rename(tmp,dst);return true;
  });
