@@ -19,7 +19,17 @@
     sage:{name:"Salbeigrün",color:"#95ad9c",cost:60},
     concrete:{name:"Sichtbeton",color:"#98a1a4",cost:85},
     brick:{name:"Klinker",color:"#aa7561",cost:110},
-    glass:{name:"Glastrennwand",color:"#a0cad7",cost:260}
+    glass:{name:"Glastrennwand",color:"#a0cad7",cost:260},
+    oakwall:{name:"Eichenpaneele",color:"#b7936b",cost:115},
+    charcoal:{name:"Anthrazit",color:"#56646e",cost:65}
+  };
+  const FLOOR_FINISHES = {
+    carpet:{name:"Büroteppich",color:"#aebec9",cost:32,pattern:"carpet"},
+    oak:{name:"Eichenparkett",color:"#c8ab84",cost:69,pattern:"wood"},
+    tile:{name:"Feinsteinzeug",color:"#dae4e3",cost:59,pattern:"tile"},
+    concrete:{name:"Industriebeton",color:"#adb6b5",cost:39,pattern:"concrete"},
+    vinyl:{name:"Vinyl Warmgrau",color:"#c4cac5",cost:42,pattern:"vinyl"},
+    epoxy:{name:"Epoxidharz",color:"#94aeb9",cost:61,pattern:"epoxy"}
   };
   const ITEM_TYPES = {
     desk:{name:"Schreibtisch",cost:430},
@@ -55,7 +65,7 @@
   function addMessage(s,title,body,level){s.messages.unshift({id:id(s,"MSG"),date:s.clock.slice(0,10),title,body,level:level||"info"});s.messages=s.messages.slice(0,65);}
   function floorFor(b,idx){
     const kind=b.type==="warehouse"?"hall":b.type==="workshop"?"workshop":b.type==="cafe"?"kitchen":"office";
-    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},wallFinishes:{},items:[]};
+    const f={id:"F"+idx,label:idx===0?"EG":idx+". OG",cols:b.w*4,rows:b.h*4,tiles:{},walls:{},doors:{},wallFinishes:{},floorFinishes:{},items:[]};
     // Complete shell: each exterior wall is also an individually editable segment.
     for(let x=0;x<f.cols;x++){f.walls["H:"+x+":0"]=1;f.walls["H:"+x+":"+f.rows]=1;}
     for(let y=0;y<f.rows;y++){f.walls["V:0:"+y]=1;f.walls["V:"+f.cols+":"+y]=1;}
@@ -313,7 +323,7 @@
     if(x1!==x2&&y1!==y2)return {ok:false,message:"Wände müssen gerade verlaufen"};
     let count=0;
     if(x1===x2){const x=x1;for(let y=Math.min(y1,y2);y<Math.max(y1,y2);y++){if(x<0||x>f.cols||y<0||y>=f.rows)continue;const k=wallKey(x,y,"V");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
-    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];}else{f.walls[k]=1;}count++;}}
+    else{const y=y1;for(let x=Math.min(x1,x2);x<Math.max(x1,x2);x++){if(y<0||y>f.rows||x<0||x>=f.cols)continue;const k=wallKey(x,y,"H");if(remove){delete f.walls[k];delete f.doors[k];if(f.wallFinishes)delete f.wallFinishes[k];}else{f.walls[k]=1;}count++;}}
     return {ok:count>0,message:count?"":"Keine Segmente ausgewählt"};
   }
   function toggleDoor(s,bid,level,edge){
@@ -330,6 +340,20 @@
     s.cash-=material.cost;
     if(!f.wallFinishes)f.wallFinishes={};
     f.wallFinishes[edge]=finish;
+    return {ok:true,cost:material.cost,finish};
+  }
+  function finishFloor(s,bid,level,x,y,finish){
+    const b=s.buildings.find(b=>b.id===bid),f=b&&b.floors[level],material=FLOOR_FINISHES[finish];
+    if(!f)return {ok:false,message:"Etage nicht vorhanden"};
+    x=Number(x);y=Number(y);
+    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=f.cols||y>=f.rows)return {ok:false,message:"Bodenfeld außerhalb der Etage"};
+    if(!material)return {ok:false,message:"Bodenbelag unbekannt"};
+    const k=key(x,y);
+    if(f.floorFinishes&&f.floorFinishes[k]===finish)return {ok:false,message:"Bodenbelag ist bereits ausgewählt"};
+    if(s.cash<material.cost)return {ok:false,message:"Nicht genügend Kapital für den Bodenbelag"};
+    s.cash-=material.cost;
+    if(!f.floorFinishes)f.floorFinishes={};
+    f.floorFinishes[k]=finish;
     return {ok:true,cost:material.cost,finish};
   }
   function paint(s,bid,level,x,y,type){
@@ -464,5 +488,5 @@
   function buyBus(s){if(s.bus)return {ok:false,message:"Busvertrag bereits aktiv"};if(s.cash<45000)return {ok:false,message:"45.000 € Anschubfinanzierung erforderlich"};s.cash-=45000;s.bus=true;addMessage(s,"ÖPNV-Anschluss verbessert","Eine neue Shuttleverbindung reduziert den modellierten Pkw-Anteil.");return {ok:true};}
   function setStaff(s,kind,delta){if(!(kind in s.staff))return {ok:false,message:"Unbekannter Personalbereich"};const target=s.staff[kind]+delta;if(target<0||target>25)return {ok:false,message:"Personalgrenze erreicht"};s.staff[kind]=target;return {ok:true};}
   function validateLoaded(v){if(!v||v.version!==VERSION||!Array.isArray(v.buildings)||!v.world||!Array.isArray(v.roads))throw Error("Spielstandformat wird nicht unterstützt");return v;}
-  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
+  return {VERSION,TYPES,FLOOR_TYPES,WALL_FINISHES,FLOOR_FINISHES,ITEM_TYPES,PARCELS,CONTRACTORS,create,isOwned,buyParcel,propertyArea,startConstructionDept,setBuilders,getQuotes,commission,cancelProject,preview,place,placePath,demolish,rent,canRent,addFloor,setWall,toggleDoor,finishWall,finishFloor,paint,putItem,capacity,metrics,advance,dispatch,buyBus,setStaff,validateLoaded,wallKey,key};
 });
