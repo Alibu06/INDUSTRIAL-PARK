@@ -35,6 +35,8 @@
 <nav class="sidebar" aria-label="Hauptnavigation">
   <div class="navgroup">
     <button class="navbtn active" data-nav="world"><span class="navsymbol">◈</span><span>Park</span></button>
+    <button class="navbtn" data-nav="land"><span class="navsymbol">▱</span><span>Flächen</span></button>
+    <button class="navbtn" data-nav="projects"><span class="navsymbol">▰</span><span>Bauaufträge</span></button>
     <button class="navbtn" data-nav="buildings"><span class="navsymbol">▦</span><span>Objekte</span></button>
     <button class="navbtn" data-nav="leasing"><span class="navsymbol">⌂</span><span>Vermietung</span></button>
     <button class="navbtn" data-nav="companies"><span class="navsymbol">♧</span><span>Firmen</span></button>
@@ -58,6 +60,9 @@
   <div id="toolStats" class="tool-stats" aria-live="polite"></div>
   <div class="map-hint" id="mapHint">Linksklick: auswählen · Mausrad: zoomen · Leertaste + Ziehen: verschieben · Rechtsklick: Optionen</div>
   <div id="contextMenu" class="context-menu hidden"></div>
+  <div id="contractorModal" class="contractor-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="contractorTitle">
+    <div class="contractor-dialog"><div class="contractor-head"><div><small>BAUPROJEKT · VERGABE</small><h2 id="contractorTitle">Bauauftrag</h2><p id="contractorSummary"></p></div><button class="icon-btn" data-action="cancel-contract" aria-label="Schließen">×</button></div><div id="contractorOffers" class="contractor-offers"></div><div class="contractor-foot"><span>Mit der Vergabe werden die Baukosten fällig. Die Arbeiten benötigen Spielzeit.</span><button class="action" data-action="cancel-contract">Abbrechen</button></div></div>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </section>
 <aside class="panel hidden" id="panel" aria-label="Verwaltung">
