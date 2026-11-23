@@ -108,6 +108,7 @@ function updateToolStats(){
    return;
  }
  const m=S.metrics(state),dragCells=ui.dragBuild;
+ if(ui.sketch&&S.TYPES[ui.tool]){target.textContent="Bauentwurf · "+ui.sketch.cells.length*16+" m² · Ziehen: erweitern · Umschalt+Ziehen: entfernen";return;}
  if(dragCells&&dragCells.length){
    const cost=dragCells.filter(p=>S.preview(state,ui.tool,p.x,p.y).ok).length*({road:9000,parking:4400,tree:750}[ui.tool]||0);
    target.textContent="Bauplanung · "+dragCells.length+" Felder · Basis "+euros(cost)+" · Danach Unternehmer auswählen";
@@ -116,9 +117,13 @@ function updateToolStats(){
 function updateMapInfo(){
  let contents="";
  if(ui.mode==="world"){
-  if(ui.selectedId&&building(ui.selectedId)){
+  if(ui.tool==="select"&&ui.selectedId&&building(ui.selectedId)){
    const b=building(ui.selectedId),c=company(b.tenantId);
    contents='<div class="info-card"><span class="kicker">OBJEKT AUSGEWÄHLT · '+esc(b.id)+'</span><b>'+esc(b.name)+'</b><p>'+esc(c?c.name:"Noch kein Mieter")+' · '+(b.w*4*b.h*4*b.levels)+' m² · '+esc(b.floors.length)+" Etage(n)"+'</p><button data-action="floor-view">Innenausbau →</button> <button data-action="property-details">Objektdaten</button></div>';
+  }else if(S.TYPES[ui.tool]){
+   const sketch=ui.sketch&&ui.sketch.tool===ui.tool?ui.sketch:null;
+   const p=sketch?S.previewFootprint(state,ui.tool,sketch.cells):null;
+   contents='<div class="info-card"><span class="kicker">FREIER GEBÄUDEGRUNDRISS</span><b>'+esc(S.TYPES[ui.tool].name)+'</b><p>'+(sketch?(sketch.cells.length*16).toLocaleString("de-DE")+' m² · '+sketch.cells.length+' Baufelder · '+euros(p.cost||0):'Erste Fläche auf der Karte aufziehen')+'</p><p>Ziehen: ergänzen · Umschalt+Ziehen: entfernen · L- und U-Formen möglich.</p>'+(p?'<div class="placement-info '+(p.ok?"":"invalid")+'">'+esc(p.message)+'</div>':'')+'<div class="buttons">'+(sketch?button("review-footprint","Angebote einholen","","primary")+button("cancel-sketch","Verwerfen"):'')+'</div></div>';
   }else if(ui.tool!=="select"){
    const tool=worldTools.find(t=>t[0]===ui.tool);
    let cost=S.TYPES[ui.tool]?S.TYPES[ui.tool].cost:({road:9000,parking:4400,tree:750})[ui.tool];
@@ -289,7 +294,7 @@ function projectsPanel(){
 function openConstructionOffer(plan){
  const tool=plan.tool,isBuilding=!!S.TYPES[tool];
  if(isBuilding){
-   const p=S.preview(state,tool,plan.x,plan.y,plan.rotation||0);
+   const p=plan.cells?S.previewFootprint(state,tool,plan.cells):S.preview(state,tool,plan.x,plan.y,plan.rotation||0);
    if(!p.ok){notify(p.message,true);return;}
  }else{
    const points=plan.points||[],unique=new Set();
@@ -299,10 +304,10 @@ function openConstructionOffer(plan){
  }
  ui.pendingPlan=plan;
  const count=isBuilding?1:plan.points.length;
- const quote=S.getQuotes(state,tool,count),name=isBuilding?S.TYPES[tool].name:tool==="road"?"Straßenbau":tool==="parking"?"Parkplatzbau":"Begrünung";
+ const quote=S.getQuotes(state,tool,count,isBuilding&&plan.cells?plan.cells.length:0),name=isBuilding?S.TYPES[tool].name:tool==="road"?"Straßenbau":tool==="parking"?"Parkplatzbau":"Begrünung";
  $("contractorTitle").textContent=name+" beauftragen";
  $("contractorSummary").textContent=isBuilding?
- "Gebäude "+S.TYPES[tool].w*4+" × "+S.TYPES[tool].h*4+" Meter · Mehrere Angebote für Bauzeit, Preis und Ausführungsqualität":
+ (plan.cells?(plan.cells.length*16)+" m² frei gezeichneter Grundriss · ":"Gebäude "+S.TYPES[tool].w*4+" × "+S.TYPES[tool].h*4+" Meter · ")+"Mehrere Angebote für Bauzeit, Preis und Ausführungsqualität":
  count+" Felder · "+(count*16).toLocaleString("de-DE")+" m² · Bauarbeiten werden erst nach Fertigstellung sichtbar";
  $("contractorOffers").innerHTML=quote.map(q=>
  '<div class="contractor-offer'+(!q.available?" disabled":"")+'"><div><h3>'+esc(q.name)+'</h3><p>'+esc(q.description)+'</p>'
@@ -345,6 +350,20 @@ function pickWall(f,h){
  const v=S.wallKey(Math.round(h.fx),Math.floor(h.fy),"V"),ho=S.wallKey(Math.floor(h.fx),Math.round(h.fy),"H");
  if(vr<hr)return f.walls[v]?v:ho;
  return f.walls[ho]?ho:v;
+}
+function sketchRect(a,b){
+ const cells=[];
+ for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++)
+  for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++)cells.push({x,y});
+ return cells.slice(0,240);
+}
+function applySketch(tool,cells,remove=false){
+ const original=ui.sketch&&ui.sketch.tool===tool?ui.sketch.cells:[];
+ const map=new Map(original.map(p=>[p.x+","+p.y,p]));
+ for(const p of cells){const k=p.x+","+p.y;if(remove)map.delete(k);else map.set(k,p);}
+ ui.sketch={tool,cells:[...map.values()].slice(0,180)};
+ const result=S.previewFootprint(state,tool,ui.sketch.cells);
+ notify(ui.sketch.cells.length+" Baufelder · "+ui.sketch.cells.length*16+" m² · "+(result.ok?"Bauentwurf bereit":result.message),!result.ok);refresh();
 }
 function pathCells(tool,a,b){
  const out=[],seen=new Set();
