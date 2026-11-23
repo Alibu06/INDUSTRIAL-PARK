@@ -423,11 +423,69 @@ function factory(canvas){
     case "desk":
       rect(-.43,-.3,.86,.6,"#b4946c",.05);
       rect(-.37,-.25,.74,.49,"#ceb18b",.035);
-      rect(-.17,-.19,.37,.25,"#405a67",.025);
-      rect(-.14,-.17,.31,.17,"#93c3d0",.02);
-      rect(-.19,.08,.42,.065,"#e4e7e1",.014);
-      circle(.3,-.1,.055,.055,"#f0ede7");
+      rect(-.4,-.23,.05,.48,"#907051",.009);
+      rect(.35,-.23,.05,.48,"#907051",.009);
+      lineLocal(-.31,-.14,.30,-.14,"rgba(96,68,44,.3)",.018);
+      rect(.22,.11,.13,.09,"#dfc39f",.01);
       break;
+    case "computer":
+      rect(-.40,-.35,.80,.61,"#a9afb1",.045);
+      rect(-.37,-.32,.74,.53,"#1c303c",.028);
+      rect(-.34,-.28,.68,.46,it.assetId==="imacPro"?"#2b536c":"#477b92",.025);
+      rect(-.1,.28,.20,.06,"#acb7ba",.012);
+      rect(-.22,.34,.44,.035,"#d6dedc",.01);
+      circle(0,-.315,.014,.014,"#0e232e");
+      break;
+    case "rack":
+      rect(-.4,-.41,.8,.82,"#384650",.035);
+      rect(-.34,-.35,.68,.7,"#182b37",.022);
+      for(let k=0;k<7;k++){
+        rect(-.27,-.30+k*.092,.54,.063,"#667e87",.012);
+        circle(.2,-.27+k*.092,.019,.021,k%3===0?"#e0ab5c":"#73d1a0");
+      }
+      break;
+    case "switch":case "server":case "firewall":case "router":case "nvr":
+      rect(-.43,-.27,.86,.55,it.type==="firewall"?"#526779":"#6f828a",.055);
+      rect(-.36,-.19,.72,.39,"#344b58",.025);
+      for(let k=0;k<6;k++)rect(-.27+k*.095,-.08,.065,.085,"#203a47",.01);
+      circle(.28,.1,.028,.03,it.type==="firewall"?"#e9ae61":"#70c49c");
+      break;
+    case "wifi":
+      if(it.assetId==="wlanCeiling"){circle(0,0,.37,.34,"#eef3f1");circle(0,0,.29,.26,"#ccd9d8");circle(.14,-.05,.025,.025,"#71caab");}
+      else{rect(-.3,-.36,.6,.72,"#eef1ef",.07);circle(0,.19,.055,.055,"#7db7bb");lineLocal(0,-.22,0,.02,"#b9c9ce",.055);}
+      break;
+    case "ups":
+      rect(-.38,-.41,.76,.82,"#435563",.04);rect(-.28,-.29,.56,.16,"#96aebe",.015);
+      rect(-.19,.07,.38,.22,"#283a46",.025);circle(.23,-.25,.04,.04,"#72c8a1");
+      break;
+    case "sofa":
+      rect(-.45,-.37,.9,.67,"#547485",.09);
+      rect(-.42,-.33,.84,.17,"#304e5f",.07);
+      rect(-.36,-.08,.31,.26,"#7796a4",.055);
+      rect(.05,-.08,.31,.26,"#7796a4",.055);
+      break;
+    case "whiteboard":case "display":
+      rect(-.48,-.39,.96,.78,it.type==="display"?"#1a343f":"#748990",.035);
+      rect(-.43,-.34,.86,.68,it.type==="display"?"#3e7891":"#f1f5ed",.016);
+      if(it.type==="whiteboard"){lineLocal(-.33,.22,.10,-.18,"#6a9aac",.04);lineLocal(-.07,.04,.29,.16,"#8da876",.035);}
+      break;
+    case "exitSign":
+      rect(-.43,-.23,.86,.46,"#428e72",.025);rect(-.36,-.16,.72,.32,"#79c5a3",.02);
+      lineLocal(.02,0,.30,0,"#f7ffff",.07);circle(-.15,-.04,.07,.07,"#f7ffff");
+      break;
+    case "extinguisher":
+      circle(0,.1,.19,.22,"#a94239");rect(-.12,-.32,.24,.38,"#ca4940",.04);
+      rect(-.10,-.23,.20,.12,"#e8e5df",.015);lineLocal(.08,-.30,.24,-.42,"#384e54",.055);
+      break;
+    case "motion":case "contact":case "socket":
+      rect(-.32,-.34,.64,.68,"#e9eeeb",.07);circle(0,-.10,.13,.13,it.type==="socket"?"#7f9399":"#abc5c8");
+      rect(-.23,.18,.46,.065,"#a8bcbf",.015);break;
+    case "emergencyLight":
+      rect(-.42,-.25,.84,.5,"#edf3f1",.055);
+      circle(-.20,0,.12,.1,"#fff3c6");circle(.20,0,.12,.1,"#fff3c6");break;
+    case "kitchen":case "shower":
+      rect(-.43,-.42,.86,.84,"#e3eae6",.04);
+      rect(-.34,-.3,.68,.58,"#9ebbc2",.03);circle(.1,.05,.14,.12,"#ecf4f4");break;
     case "chair":
       circle(0,.04,.29,.28,"#415663");
       rect(-.27,-.36,.54,.18,"#5c7382",.08);
@@ -436,8 +494,8 @@ function factory(canvas){
       circle(0,.04,.16,.15,"#5d7889");
       break;
     case "table":
-      circle(0,0,.42,.31,"#ad8a67");
-      circle(0,0,.38,.27,"#c6a17a");
+      if(it.assetId==="tableRound"){circle(0,0,.42,.31,"#ad8a67");circle(0,0,.38,.27,"#c6a17a");}
+      else{rect(-.47,-.32,.94,.64,"#987451",.055);rect(-.44,-.29,.88,.58,"#c3a180",.04);}
       circle(-.12,-.4,.12,.07,"#4b6573");
       circle(.16,.4,.12,.07,"#4b6573");
       circle(-.46,0,.09,.14,"#4b6573");
@@ -501,10 +559,10 @@ function factory(canvas){
       if(!broken){c.shadowColor="rgba(255,238,169,.8)";c.shadowBlur=.4*z;circle(0,0,.14,.12,"#fffef0");}
       break;
     case "camera":
-      rect(-.42,-.08,.19,.16,"#657c81",.02);
-      rect(-.26,-.19,.6,.35,broken?"#c07867":"#344e5c",.06);
-      circle(.22,-.02,.09,.1,"#8dc0d1");
-      circle(.23,-.02,.045,.055,"#172f43");
+      if(it.assetId==="dome"){circle(0,0,.36,.34,"#f5f8f5");circle(0,0,.27,.26,"#b9d0d4");circle(.06,-.03,.16,.17,"#344f60");circle(.10,-.04,.06,.07,"#88c3d4");}
+      else if(it.assetId==="ptz"){rect(-.23,-.38,.47,.19,"#e7edef",.06);circle(0,.06,.34,.33,"#f0f6f4");circle(.08,.13,.2,.19,"#587c8b");circle(.09,.15,.10,.10,"#223c4c");}
+      else if(it.assetId==="turret"){circle(-.12,0,.28,.27,"#eef4f2");rect(-.05,-.19,.39,.37,"#d3e2e4",.10);circle(.24,0,.11,.11,"#223c4b");}
+      else{rect(-.42,-.08,.19,.16,"#657c81",.02);rect(-.26,-.19,.6,.35,broken?"#c07867":"#e4e9e6",.06);circle(.22,-.02,.09,.1,"#6c9eae");circle(.23,-.02,.045,.055,"#172f43");}
       break;
     case "alarm":
       circle(0,0,.28,.28,broken?"#ca8b7b":"#e3edec");
