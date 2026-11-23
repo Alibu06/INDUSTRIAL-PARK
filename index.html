@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#102835"/>
+<title>INDUSTRIAL PARK — AM Gewerbepark GmbH</title>
+<link rel="stylesheet" href="./src/style.css"/>
+</head>
+<body>
+<div id="app">
+<header class="topbar">
+  <div class="brand" title="INDUSTRIAL PARK">
+    <div class="brandmark"><svg viewBox="0 0 38 38" aria-hidden="true"><path d="M5 25.5 18.5 6l14 19.5M11 25.5h21M18.5 15v17M5 32h27" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter"/></svg></div>
+    <div class="brandtext"><strong>INDUSTRIAL <span>PARK</span></strong><small>AM GEWERBEPARK GMBH</small></div>
+  </div>
+  <div class="topmetrics">
+    <div class="metric"><span>LIQUIDITÄT</span><strong id="cash">–</strong></div>
+    <div class="metric"><span>MONATSMIETE</span><strong id="rent-total">–</strong></div>
+    <div class="metric"><span>VERMIETUNG</span><strong id="occupancy">–</strong></div>
+  </div>
+  <div class="topcontrols">
+    <div class="clock"><span class="clockdate" id="date">03.05.2027</span><strong id="time">07:30</strong></div>
+    <div class="speed" role="group" aria-label="Spielgeschwindigkeit">
+      <button type="button" data-speed="0" title="Pausieren">Ⅱ</button>
+      <button type="button" data-speed="1" class="active" title="Normal">1×</button>
+      <button type="button" data-speed="4" title="Schnell">4×</button>
+      <button type="button" data-speed="16" title="Sehr schnell">16×</button>
+    </div>
+    <button class="topicon" id="saveBtn" title="Spiel speichern (Strg+S)">◫ <span>Speichern</span></button>
+  </div>
+</header>
+<div class="workspace">
+<nav class="sidebar" aria-label="Hauptnavigation">
+  <div class="navgroup">
+    <button class="navbtn active" data-nav="world"><span class="navsymbol">◈</span><span>Park</span></button>
+    <button class="navbtn" data-nav="buildings"><span class="navsymbol">▦</span><span>Objekte</span></button>
+    <button class="navbtn" data-nav="leasing"><span class="navsymbol">⌂</span><span>Vermietung</span></button>
+    <button class="navbtn" data-nav="companies"><span class="navsymbol">♧</span><span>Firmen</span></button>
+    <button class="navbtn" data-nav="operations"><span class="navsymbol">⚙</span><span>Betrieb</span></button>
+    <button class="navbtn" data-nav="transport"><span class="navsymbol">↝</span><span>Mobilität</span></button>
+    <button class="navbtn" data-nav="finance"><span class="navsymbol">▥</span><span>Finanzen</span></button>
+  </div>
+  <div class="navgroup bottom">
+    <button class="navbtn" data-nav="messages"><span class="navsymbol">✉</span><span>Meldungen</span><b id="alertDot"></b></button>
+    <button class="navbtn" data-nav="help"><span class="navsymbol">?</span><span>Hilfe</span></button>
+  </div>
+</nav>
+<section class="stage" id="stage">
+  <canvas id="gameCanvas" aria-label="Interaktive Gewerbepark-Karte"></canvas>
+  <div class="map-hud">
+    <div class="map-chip"><span class="live-dot"></span><b id="viewTitle">GEWERBEPARK · KARTE</b><span id="viewHint">Isometrische Übersicht</span></div>
+    <div class="map-chips-right"><button class="subtleBtn" id="layersBtn">◫ <span id="layerName">Normalansicht</span></button><button class="subtleBtn" id="fitBtn">⊞ Ansicht</button></div>
+  </div>
+  <div id="mapInfo" class="map-info"></div>
+  <div id="toolbar" class="toolbar"></div>
+  <div class="map-hint" id="mapHint">Linksklick: auswählen · Mausrad: zoomen · Leertaste + Ziehen: verschieben · Rechtsklick: Optionen</div>
+  <div id="contextMenu" class="context-menu hidden"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</section>
+<aside class="panel hidden" id="panel" aria-label="Verwaltung">
+  <div class="panel-top"><div><small>AM PROPERTY MANAGEMENT</small><h2 id="panelTitle">Übersicht</h2></div><button id="closePanel" class="icon-btn" title="Schließen">×</button></div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-footer">INDUSTRIAL PARK <span>V1.0 · OFFLINE</span></div>
+</aside>
+</div>
+</div>
+<script src="./src/sim.js"></script>
+<script src="./src/render.js"></script>
+<script src="./src/app.js"></script>
+</body>
+</html>
