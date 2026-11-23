@@ -239,19 +239,50 @@ function factory(canvas){
     const m=S.metrics(s);const color=m.demand>m.parking?"rgba(213,98,67,.48)":"rgba(62,163,111,.45)";
     for(const p of s.parking){const [x,y]=p.split(",").map(Number);diamond(x,y,u,color);}
   }
+  // Visible road works and landscaping works (nothing appears magically completed).
+  for(const project of s.projects||[]){
+    if(project.status!=="bau"||project.buildingId)continue;
+    for(const p of project.points){
+      const poly=[worldP(p.x,p.y,0,u),worldP(p.x+1,p.y,0,u),worldP(p.x+1,p.y+1,0,u),worldP(p.x,p.y+1,0,u)];
+      polygon(c,poly,"rgba(235,161,67,.19)","#d7a351",Math.max(1.2,1.8*u.cam.zoom));
+      if(u.cam.zoom>.57){
+        const q=worldP(p.x+.5,p.y+.5,0,u);
+        line(c,{x:q.x-6*u.cam.zoom,y:q.y-4*u.cam.zoom},{x:q.x+6*u.cam.zoom,y:q.y+4*u.cam.zoom},"#f7d68b",2*u.cam.zoom);
+      }
+    }
+    if(project.points.length){
+      const p=project.points[Math.floor(project.points.length/2)],q=worldP(p.x+.5,p.y+.5,8,u);
+      if(u.cam.zoom>.61){
+        c.fillStyle="rgba(99,72,36,.88)";c.beginPath();c.roundRect(q.x-38*u.cam.zoom,q.y-17*u.cam.zoom,76*u.cam.zoom,20*u.cam.zoom,5*u.cam.zoom);c.fill();
+        drawText("BAU · "+project.remaining+" T",q.x,q.y-7*u.cam.zoom,9*u.cam.zoom,"#fff0cf",true);
+      }
+    }
+  }
   const things=s.buildings.slice().sort((a,b)=>(a.x+a.y+a.w+a.h)-(b.x+b.y+b.w+b.h));
   things.forEach(b=>paintBuilding(b,s,u));
-  const hour=new Date(s.clock).getUTCHours();
-  const count=hour>=6&&hour<20?Math.min(28,Math.max(8,S.metrics(s).jobs/10)):4;
-  const colors=["#cfdbdb","#627e92","#c7a28d","#384d61","#a8b6a3"];
-  for(let i=0;i<count;i++){
-    const path=i%4,phase=((t*.000035*(1+i%3)+i*.17)%1);
-    let x,y,dir;
-    if(path===0){x=2+phase*41;y=8.5;dir=.46;}
-    else if(path===1){x=38.5;y=9+phase*27;dir=2.58;}
-    else if(path===2){x=9;y=9+phase*27;dir=2.60;}
-    else{x=9+phase*29;y=29.4;dir=.46;}
-    vehicle(worldP(x,y,0,u),u,colors[i%colors.length],dir,i%7===0?1.7:1);
+  const trafficHour=new Date(s.clock).getUTCHours();
+  const trafficCount=trafficHour>=6&&trafficHour<20?8:3;
+  const carColors=["#dae0da","#698595","#c4a99c","#3e5b6a","#a5bab2","#cfcab9"];
+  for(let i=0;i<trafficCount;i++){
+    // Public street remains in the surrounding landscape, even while the park is still empty.
+    const progress=(t*.000021*(i%3+1)+i/trafficCount)%1;
+    const x=i%2===0?1+45*progress:46-45*progress;
+    const p=worldP(x,i%2===0?8.55:9.40,0,u);
+    vehicle(p,u,carColors[i%carColors.length],i%2===0?.46:3.6,i%7===0?1.6:1);
+  }
+  // Private traffic only appears on streets that the player has actually completed.
+  const jobs=S.metrics(s).jobs,privateCount=Math.min(12,Math.floor(jobs/12));
+  if(privateCount&&s.roads.length){
+    const built=new Set(s.roads);
+    for(let i=0;i<privateCount;i++){
+      const pcell=s.roads[Math.floor(hash(i,22)*s.roads.length)];
+      if(!pcell)continue;
+      const [cx,cy]=pcell.split(",").map(Number);
+      const axis=built.has(S.key(cx+1,cy))?"x":built.has(S.key(cx,cy+1))?"y":null;
+      const pct=(.15+(t*.000085+i*.13)%1)*.6;
+      const dx=axis==="x"?pct:0,dy=axis==="y"?pct:0;
+      vehicle(worldP(cx+.30+dx,cy+.45+dy,0,u),u,carColors[(i+2)%carColors.length],axis==="y"?2.58:.46,.83);
+    }
   }
   pedestrians(s,u,t);
   if(u.overlay==="vacancy"){
