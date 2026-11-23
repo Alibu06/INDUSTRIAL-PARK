@@ -573,7 +573,9 @@
     const desktop=["computer","router","switch","firewall","nvr","server"].includes(def.base);
     if(collisions.length&&!(desktop&&collisions.every(it=>["desk","table","rack","shelf"].includes(it.type)))&&def.mount!=="wall")
       return {ok:false,message:"Stellfläche bereits belegt"};
-    if(desktop&&def.mount==="floor"&&collisions.length===0)return {ok:false,message:"Computer oder Netzwerkgerät benötigt geeignete Aufstellfläche"};
+    if(desktop&&def.mount==="floor"&&!f.items.some(it=>
+      ["desk","table","rack","shelf"].includes(it.type)&&x>=it.x-.01&&y>=it.y-.01&&x+w<=it.x+(it.w||1)+.01&&y+d<=it.y+(it.d||1)+.01
+    ))return {ok:false,message:"Computer oder Netzwerkgerät muss vollständig auf einem Tisch, Rack oder Regal stehen"};
     if(variant&&!def.variants.includes(variant))return {ok:false,message:"Unbekannte Produktvariante"};
     if(s.cash<def.price)return {ok:false,message:"Zu wenig Geld"};
     const it={id:id(s,"ITM"),type:def.base,assetId:def.id,x,y,w,d,h:def.h,mount:def.mount,rotation:rotation%2?1:0,variant:variant||def.variants[0]};
@@ -586,7 +588,8 @@
   }
   function placeSet(s,bid,level,setId,x,y,rotation=0){
     const group=FURNITURE_SETS[setId];if(!group)return {ok:false,message:"Einrichtungsvorlage unbekannt"};
-    const shifted=group.pieces.map(p=>({asset:p.id,x:Math.round((x+p.x)*4)/4,y:Math.round((y+p.y)*4)/4}));
+    const turned=Math.abs(rotation)%2===1,maxDepth=Math.max(...group.pieces.map(p=>p.y+ASSET_INDEX[p.id].d));
+    const shifted=group.pieces.map(p=>({asset:p.id,x:Math.round((x+(turned?maxDepth-p.y-ASSET_INDEX[p.id].d:p.x))*4)/4,y:Math.round((y+(turned?p.x:p.y))*4)/4}));
     // Validate the complete group on a simulation copy before charging or changing the real save.
     const preview=clone(s);
     for(const p of shifted){const result=placeAsset(preview,bid,level,p.asset,p.x,p.y,rotation);if(!result.ok)return result;}
