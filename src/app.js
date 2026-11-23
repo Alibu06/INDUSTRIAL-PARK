@@ -65,13 +65,30 @@ const floorTools=[
  ["floorfinish:concrete","▨","Betonboden"],["floorfinish:vinyl","▥","Vinyl"],["floorfinish:epoxy","▣","Epoxid"]
 ];
 const catalogGroups=[
- ["alle","Alle"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
+ ["alle","Alle"],["sets","Komplettsets"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
  ["brandschutz","Brandschutz"],["technik","Gebäudetechnik"],["sanitär","Sanitär"],["lager","Lager"],
  ["industrie","Industrie"],["deko","Dekoration"],["türen","Türen"],["fenster","Fenster"],["zonen","Zonen"]
 ];
+function zonesPanel(){
+ const b=building(ui.selectedId);
+ if(!b)return '<p class="panel-note">Bitte zuerst ein Gebäude öffnen.</p>';
+ let html='<p class="panel-note">Die Zonennutzung bleibt im normalen Innenraum unsichtbar. Der Zonenfilter zeigt farbige Flächen und Beschriftungen.</p><div class="section-label">RAUMANFORDERUNGEN</div>';
+ for(let level=0;level<b.floors.length;level++){
+   const f=b.floors[level],types=[...new Set(Object.values(f.zones||{}))];
+   if(!types.length)html+=entry(f.label,"Noch keine Funktionszonen zugewiesen.",button("floor-view","Zone zeichnen","","primary"));
+   for(const id of types){const r=S.zoneReport(state,b.id,level,id);
+     html+=entry(esc(r.name),f.label+" · "+r.area+" m²",'<span class="pill '+(r.ready?"":"warning")+'">'+(r.ready?"Nutzbar":"Ausstattung fehlt")+'</span>'
+       +r.requirements.map(q=>line(q.name,(q.ok?"✓":"✕")+(q.ok?" erfüllt":" fehlt"))).join(""));
+   }
+ }
+ return html+'<div class="section-label">ANZEIGE</div>'+button("zones-toggle",ui.zoneFilter?"Zonenfilter ausblenden":"Zonenfilter einblenden","","primary");
+}
 function catalogPanel(){
  const category=ui.catalogCategory,query=ui.catalogSearch.trim().toLocaleLowerCase("de-DE");
  const items=[
+  ...Object.entries(S.FURNITURE_SETS).map(([id,a])=>({id,category:"sets",name:a.name,tool:"set:"+id,
+    description:a.pieces.length+" einzelne Möbel · "+euros(a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0)),
+    price:a.pieces.reduce((n,p)=>n+(S.ASSET_INDEX[p.id]?.price||0),0),variants:[],feature:"Vorlage"})),
   ...S.ASSETS.map(a=>({id:a.id,category:a.category,name:a.name,tool:"asset:"+a.id,
     description:a.w.toLocaleString("de-DE")+" × "+a.d.toLocaleString("de-DE")+" m · "+a.mount+" · "+euros(a.price),price:a.price,
     variants:a.variants,feature:a.security||a.base})),
@@ -92,7 +109,7 @@ function updateToolbar(){
  let markup='<button class="toolbtn" data-action="'+(inFloor?"world-view":"open-buildings")+'"><span class="toolicon">←</span><small>'+(inFloor?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
  markup+=list.map(v=>'<button class="toolbtn'+(ui.tool===v[0]?" active":"")+(v[0]==="zone-overlay"&&ui.zoneFilter?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
  if(inFloor){
-   markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="open-catalog"><span class="toolicon">⊞</span><small>Alle Objekte</small></button>';
+   markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="open-catalog"><span class="toolicon">⊞</span><small>Alle Objekte</small></button><button class="toolbtn" data-action="open-zones"><span class="toolicon">▤</span><small>Raumprüfung</small></button>';
    markup+='<button class="toolbtn" data-action="floor-view-toggle"><span class="toolicon">◈</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
  }else{
    markup+='<button class="toolbtn" data-action="cancel-sketch" '+(!ui.sketch?"disabled":"")+'><span class="toolicon">⊗</span><small>Skizze löschen</small></button>';
@@ -133,11 +150,12 @@ function updateMapInfo(){
  }else{
   const b=building(ui.selectedId),f=b&&b.floors[ui.floorIndex];
   const selectedAsset=ui.tool.startsWith("asset:")?S.ASSET_INDEX[ui.tool.slice(6)]:null;
+   const selectedSet=ui.tool.startsWith("set:")?S.FURNITURE_SETS[ui.tool.slice(4)]:null;
    const selectedDoor=ui.tool.startsWith("door:")?S.DOOR_MODELS[ui.tool.slice(5)]:ui.tool.startsWith("window:")?S.WINDOW_MODELS[ui.tool.slice(7)]:null;
    const selectedZone=ui.tool.startsWith("zone:")?S.ZONE_TYPES[ui.tool.slice(5)]:null;
    const finish=ui.tool.startsWith("finish:")?S.WALL_FINISHES[ui.tool.slice(7)]:null;
   const floorFinish=ui.tool.startsWith("floorfinish:")?S.FLOOR_FINISHES[ui.tool.slice(12)]:null;
-  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":selectedAsset?selectedAsset.name+" · "+selectedAsset.w+" × "+selectedAsset.d+" m · "+euros(selectedAsset.price)+" · R drehen":selectedDoor?selectedDoor.name+" · Wand anklicken · "+euros(selectedDoor.price):selectedZone?"Zone zeichnen: "+selectedZone.name+" · Anforderungen prüfen":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
+  contents='<div class="info-card"><span class="kicker">INNENAUSBAU · '+(ui.floorView==="iso"?"2,5D":"GRUNDRISS")+'</span><b>'+esc(f?.label||"Erdgeschoss")+'</b><p>'+(f?f.cols+" × "+f.rows+" Meter":"")+" · "+(finish?"Wand anklicken: "+finish.name+" · "+euros(finish.cost)+" je Segment":floorFinish?"Bodenfelder anklicken oder ziehen: "+floorFinish.name+" · "+euros(floorFinish.cost)+" pro m²":selectedAsset?selectedAsset.name+" · "+selectedAsset.w+" × "+selectedAsset.d+" m · "+euros(selectedAsset.price)+" · R drehen":selectedSet?selectedSet.name+" · "+selectedSet.pieces.length+" Einzelteile · R drehen":selectedDoor?selectedDoor.name+" · Wand anklicken · "+euros(selectedDoor.price):selectedZone?"Zone zeichnen: "+selectedZone.name+" · Anforderungen prüfen":ui.wallStart?"Endpunkt der Wand wählen.":"Wände, Türen, Räume und Ausstattung frei gestalten.")+'</p><button data-action="floor-view-toggle">'+(ui.floorView==="iso"?"Zum 2D-Bauplan":"Zur 2,5D-Ansicht")+'</button></div>';
  }
  $("mapInfo").innerHTML=contents;
 }
@@ -328,7 +346,7 @@ function focusParcel(id){
 }
 function updatePanel(){
  const panel=$("panel");if(panel.classList.contains("hidden"))return;
- const sections={catalog:["Baukatalog · Planen & Ausstatten",catalogPanel],property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
+ const sections={catalog:["Baukatalog · Planen & Ausstatten",catalogPanel],zones:["Funktionszonen & Anforderungen",zonesPanel],property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
  const section=sections[ui.nav]||sections.buildings;$("panelTitle").textContent=section[0];$("panelBody").innerHTML=section[1]();
 }
 function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats();updatePanel();}
@@ -411,7 +429,11 @@ function floorClick(e){
   if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Wandoberfläche geändert · "+euros(res.cost));
  }else if(ui.tool.startsWith("floorfinish:")){if(!h.inside)return;checkpoint();const res=S.finishFloor(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(12));if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Bodenbelag verlegt · "+euros(res.cost));}
  else if(ui.tool.startsWith("room:")){if(!h.inside)return;checkpoint();const r=S.paint(state,b.id,ui.floorIndex,h.x,h.y,ui.tool.slice(5));if(!r.ok)notify(r.message,true);}
- else if(ui.tool.startsWith("asset:")){
+ else if(ui.tool.startsWith("set:")){
+   if(!h.inside)return;
+   checkpoint();const res=S.placeSet(state,b.id,ui.floorIndex,ui.tool.slice(4),Math.round(h.fx*4)/4,Math.round(h.fy*4)/4,ui.rotation);
+   if(!res.ok)undoStack.pop();choice(res.ok,res.message||res.count+" Objekte als Set platziert · "+euros(res.cost));
+ }else if(ui.tool.startsWith("asset:")){
    const def=S.ASSET_INDEX[ui.tool.slice(6)];
    if(!def){notify("Katalogobjekt fehlt.",true);return;}
    const px=Math.max(0,Math.round(h.fx*4)/4),py=Math.max(0,Math.round(h.fy*4)/4);
@@ -449,6 +471,7 @@ function act(name,element){
  switch(name){
  case "floor-view":setViewFloor(ui.selectedId);break;
  case "open-catalog":panelOpen("catalog");break;
+ case "open-zones":panelOpen("zones");break;
  case "catalog-filter":ui.catalogCategory=id;updatePanel();break;
  case "catalog-select":ui.tool=element.dataset.tool;ui.assetVariant=element.dataset.variant||null;closePanel();refresh();notify("Ausgewählt: "+(S.ASSET_INDEX[ui.tool.slice(6)]?.name||ui.tool)+". Auf der Etage platzieren.");break;
  case "cancel-sketch":ui.sketch=null;ui.dragBuild=null;refresh();notify("Bauentwurf verworfen.");break;
