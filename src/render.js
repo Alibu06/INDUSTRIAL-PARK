@@ -173,13 +173,13 @@ function factory(canvas){
   const bg=c.createLinearGradient(0,0,0,ch);
   bg.addColorStop(0,"#d9e7de");bg.addColorStop(1,"#bad1c3");
   c.fillStyle=bg;c.fillRect(0,0,cw,ch);
-  const roads=new Set(s.roads),parks=new Set(s.parking),trees=new Set(s.trees);
+  const roads=new Set([...(s.publicRoads||[]),...s.roads]),publicRoads=new Set(s.publicRoads||[]),parks=new Set(s.parking),trees=new Set(s.trees);
   const z=u.cam.zoom;
   const busyHours=(new Date(s.clock).getUTCHours()>=7&&new Date(s.clock).getUTCHours()<=18);
   for(let y=0;y<s.world.h;y++)for(let x=0;x<s.world.w;x++){
     const k=S.key(x,y),road=roads.has(k),park=parks.has(k),n=roads.has(S.key(x,y-1)),e=roads.has(S.key(x+1,y)),w=roads.has(S.key(x-1,y)),south=roads.has(S.key(x,y+1));
     const near=n||e||w||south,v=hash(x,y,3);
-    diamond(x,y,u,road?"#647278":park?"#a6b2b0":near?"#bdc9bd":v>.8?"#91a98f":v>.4?"#9eb39b":"#a7bda3",road?"rgba(232,237,236,.045)":"rgba(46,73,54,.065)");
+    diamond(x,y,u,road?(publicRoads.has(k)?"#66767d":"#647278"):park?"#a6b2b0":near?"#bdc9bd":v>.8?"#91a98f":v>.4?"#9eb39b":"#a7bda3",road?"rgba(232,237,236,.045)":"rgba(46,73,54,.065)");
     if(road){
       const corners=[worldP(x,y,0,u),worldP(x+1,y,0,u),worldP(x+1,y+1,0,u),worldP(x,y+1,0,u)];
       if(!n)line(c,corners[0],corners[1],"#c5d0cc",2*z);
@@ -210,6 +210,30 @@ function factory(canvas){
       if(roads.has(S.key(39,y)))streetFurniture(41,y,u,"lamp");
     }
     streetFurniture(20,16,u,"sign");streetFurniture(22,25,u,"bench");
+  }
+  // Parcel outlines are game-world geometry; only parcels actually bought can be developed.
+  if(s.parcels){
+    for(const parcel of s.parcels){
+      const a=worldP(parcel.x,parcel.y,0,u),b=worldP(parcel.x+parcel.w,parcel.y,0,u),
+        d=worldP(parcel.x+parcel.w,parcel.y+parcel.h,0,u),f=worldP(parcel.x,parcel.y+parcel.h,0,u);
+      const poly=[a,b,d,f];
+      c.save();
+      if(parcel.owned){
+        polygon(c,poly,"rgba(122,190,167,.065)","rgba(52,134,117,.80)",Math.max(1.6,2.4*u.cam.zoom));
+        c.setLineDash([5*u.cam.zoom,4*u.cam.zoom]);polygon(c,poly,null,"rgba(215,251,231,.62)",.9*u.cam.zoom);
+      }else{
+        polygon(c,poly,"rgba(58,81,82,.10)","rgba(90,124,118,.23)",Math.max(1,.9*u.cam.zoom));
+      }
+      c.restore();
+      const p=worldP(parcel.x+parcel.w/2,parcel.y+parcel.h/2,0,u);
+      if(u.cam.zoom>.59){
+        const txt=parcel.owned?"EIGENES GRUNDSTÜCK":parcel.name.toUpperCase();
+        c.font="600 10px Segoe UI,Arial";const ww=Math.max(96,c.measureText(txt).width+19);
+        c.fillStyle=parcel.owned?"rgba(28,87,79,.85)":"rgba(43,64,63,.53)";
+        c.beginPath();c.roundRect(p.x-ww/2,p.y-11,ww,22,6);c.fill();
+        drawText(txt,p.x,p.y,10,"#f1faf5",true);
+      }
+    }
   }
   if(u.overlay==="traffic"){
     const m=S.metrics(s);const color=m.demand>m.parking?"rgba(213,98,67,.48)":"rgba(62,163,111,.45)";
