@@ -228,6 +228,7 @@ function projectsPanel(){
  +stat("Eigene Bauarbeiter",own.workers)+stat("Baustellenbudget",euros(state.cash))+'</div>'
  +'<p class="panel-note">Vor jeder Baumaßnahme holst du mehrere echte Angebote ein. Bis zum Aufbau deines eigenen Bauunternehmens übernehmen fremde Betriebe sämtliche Hoch- und Tiefbauarbeiten. Zeit, Preis und Qualität variieren je Auftragnehmer.</p>'
  +'<div class="section-label">AKTUELLE BAUSTELLEN</div>'
+ +'<div class="entry"><div class="entrytitle">Bauzeit planen</div><div class="entrysub">Vorspulen, bis laufende Bauarbeiten abgeschlossen sind.</div><div class="buttons">'+button("advance-day","1 Tag vorspulen")+button("advance-week","7 Tage vorspulen")+'</div></div>'
  +(active.map(p=>{
  const b=p.buildingId&&building(p.buildingId),label=b?b.name:p.tool==="road"?"Straßen- und Wegebau":p.tool==="parking"?"Parkplatzbau":"Außenanlagen und Grünpflege";
  const done=Math.round(100*(1-p.remaining/p.totalDays));
@@ -235,7 +236,7 @@ function projectsPanel(){
  '<span class="pill warning">Im Bau</span>'+line("Auftragssumme",euros(p.quote))
  +line("Restbauzeit",p.remaining+" Tage")+line("Fortschritt",done+" %")
  +'<div class="progress-track"><div class="progress-fill" style="width:'+done+'%"></div></div>'
- +(b?button("map-building","Baustelle ansehen",'data-id="'+b.id+'"'):""));
+ +(b?button("map-building","Baustelle ansehen",'data-id="'+b.id+'"'):"")+' '+button("cancel-project","Auftrag stornieren",'data-id="'+p.id+'"',"danger"));
  }).join("")||'<div class="empty-state"><h3>Noch kein Bauauftrag vergeben</h3><p>Wähle auf der Parkkarte zuerst eine Straße, eine Stellfläche oder ein Gebäude. Beim Platzieren öffnet sich die Vergabe mit mehreren Angeboten.</p>'+button("world-view","Bauvorhaben auf der Karte planen","","primary")+'</div>')
  +'<div class="section-label">EIGENE BAUABTEILUNG</div>'
  +entry(own.active?"Eigener Baubetrieb · aktiv":"Eigene Bauabteilung gründen",
@@ -383,6 +384,8 @@ function act(name,element){
  case "focus-parcel":focusParcel(id);break;
  case "found-crew":checkpoint();res=S.startConstructionDept(state);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Eigene Bauabteilung gegründet.");refresh();break;
  case "builders-up":case "builders-down":checkpoint();res=S.setBuilders(state,name==="builders-up"?1:-1);if(!res.ok)undoStack.pop();choice(res.ok,res.message||"Baupersonal angepasst.");refresh();break;
+ case "cancel-project":if(confirm("Bauauftrag wirklich stornieren? Es wird nur ein Teil der Kosten erstattet.")){checkpoint();res=S.cancelProject(state,id);if(!res.ok)undoStack.pop();choice(res.ok,res.ok?"Bauauftrag storniert · "+euros(res.refund)+" erstattet":res.message);refresh();}break;
+ case "advance-day":case "advance-week":S.advance(state,(name==="advance-week"?7:1)*1440);refresh();notify(name==="advance-week"?"7 Tage vorgespult.":"1 Tag vorgespult.");break;
  case "cancel-contract":closeConstructionOffer();break;
  case "commission-project":{
    if(!ui.pendingPlan){notify("Kein Bauvorhaben ausgewählt.",true);break;}
