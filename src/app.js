@@ -7,7 +7,7 @@ let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,dra
 const undoStack=[],redoStack=[];
 function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
 function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,pendingPlan:null,floorView:"iso",cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,hoverWall:null,wallStart:null,overlay:"normal",speed:1};
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,sketch:null,pendingPlan:null,floorView:"iso",catalogCategory:"alle",catalogSearch:"",assetVariant:null,zoneFilter:false,cam:{cx:15,cy:19,zoom:.98,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,hoverWall:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -29,8 +29,8 @@ function panelOpen(section){
  updatePanel();resizeSoon();
 }
 function closePanel(){$("panel").classList.add("hidden");ui.nav="world";document.querySelectorAll(".navbtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.nav==="world"));resizeSoon();}
-function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.floorView="iso";ui.tool="wall";ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
-function setViewWorld(){ui.mode="world";ui.tool="select";ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
+function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.floorView="iso";ui.tool="wall";ui.zoneFilter=false;ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
+function setViewWorld(){ui.mode="world";ui.tool="select";ui.sketch=null;ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
 function selectBuilding(b){ui.selectedId=b?b.id:null;refresh();}
 function redrawHUD(){
  const m=S.metrics(state),d=$("date"),t=$("time");
@@ -64,25 +64,40 @@ const floorTools=[
  ["floorfinish:carpet","▦","Teppich"],["floorfinish:oak","▤","Parkett"],["floorfinish:tile","▦","Fliesen"],
  ["floorfinish:concrete","▨","Betonboden"],["floorfinish:vinyl","▥","Vinyl"],["floorfinish:epoxy","▣","Epoxid"]
 ];
+const catalogGroups=[
+ ["alle","Alle"],["möbel","Möbel"],["it","IT & Netzwerk"],["sicherheit","Video & Zutritt"],
+ ["brandschutz","Brandschutz"],["technik","Gebäudetechnik"],["sanitär","Sanitär"],["lager","Lager"],
+ ["industrie","Industrie"],["deko","Dekoration"],["türen","Türen"],["fenster","Fenster"],["zonen","Zonen"]
+];
+function catalogPanel(){
+ const category=ui.catalogCategory,query=ui.catalogSearch.trim().toLocaleLowerCase("de-DE");
+ const items=[
+  ...S.ASSETS.map(a=>({id:a.id,category:a.category,name:a.name,tool:"asset:"+a.id,
+    description:a.w.toLocaleString("de-DE")+" × "+a.d.toLocaleString("de-DE")+" m · "+a.mount+" · "+euros(a.price),price:a.price,
+    variants:a.variants,feature:a.security||a.base})),
+  ...Object.entries(S.DOOR_MODELS).map(([id,d])=>({id,category:"türen",name:d.name,tool:"door:"+id,description:d.width+" m Öffnung · "+d.material+" · "+euros(d.price),price:d.price,variants:[],feature:d.fire?"Feuerwiderstand "+d.fire+" Min.":"Bauteil"})),
+  ...Object.entries(S.WINDOW_MODELS).map(([id,d])=>({id,category:"fenster",name:d.name,tool:"window:"+id,description:d.width+" m Öffnung · "+d.material+" · "+euros(d.price),price:d.price,variants:[],feature:"Außenwand"})),
+  ...Object.entries(S.ZONE_TYPES).map(([id,z])=>({id,category:"zonen",name:z.name,tool:"zone:"+id,description:"Anforderungen: "+z.needs.join(", ")+" · min. "+z.minArea+" m²",price:0,variants:[],feature:"Funktionszone"}))
+ ];
+ const visible=items.filter(a=>(category==="alle"||a.category===category)&&(!query||[a.id,a.name,a.description,a.category,a.feature].join(" ").toLocaleLowerCase("de-DE").includes(query)));
+ return '<div class="catalog-topline"><label for="catalogSearch">Im Baukatalog suchen</label><input id="catalogSearch" class="catalog-search" autocomplete="off" placeholder="iMac, Dome, T30, Glaswand, Access Point ..." value="'+esc(ui.catalogSearch)+'"/></div>'
+ +'<div class="catalog-filters">'+catalogGroups.map(([id,name])=>'<button class="catalog-filter '+(category===id?"active":"")+'" data-action="catalog-filter" data-id="'+id+'">'+esc(name)+'</button>').join("")+'</div>'
+ +'<p class="panel-note">'+visible.length+' von '+items.length+' Bauobjekten und Zonenvorlagen · Preise und Maße sind Spielkatalogwerte. Einrichtungsobjekte rasten auf 25-cm-Schritten ein.</p>'
+ +(visible.length?visible.map(a=>'<article class="catalog-card"><div class="catalog-icon '+a.category+'">'+(a.category==="türen"?"▯":a.category==="fenster"?"▧":a.category==="sicherheit"?"◉":a.category==="brandschutz"?"♧":a.category==="it"?"▣":"▤")+'</div><div class="catalog-card-body"><strong>'+esc(a.name)+'</strong><small>'+esc(a.description)+'</small><small>'+esc(a.category.toUpperCase())+' · '+esc(a.feature)+'</small></div><div class="catalog-card-actions">'
+ +(a.variants.length?'<div class="catalog-variants">'+a.variants.map(v=>button("catalog-select",esc(v),'data-tool="'+esc(a.tool)+'" data-variant="'+esc(v)+'"',"small")).join("")+'</div>':button("catalog-select",a.price?euros(a.price):"Zone wählen",'data-tool="'+esc(a.tool)+'"',"primary"))+'</div></article>').join(""):'<div class="empty-state"><h3>Keine passenden Bauobjekte</h3><p>Entferne einen Filter oder suche nach einer anderen Bezeichnung.</p></div>');
+}
 function updateToolbar(){
- const list=ui.mode==="floor"?floorTools:worldTools;
- let markup='<button class="toolbtn" data-action="'+(ui.mode==="floor"?"world-view":"open-buildings")+'" title="'+(ui.mode==="floor"?"Zurück zum Park":"Objektverwaltung")+'"><span class="toolicon">'+(ui.mode==="floor"?"←":"▤")+'</span><small>'+(ui.mode==="floor"?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
- const finishIndex=list.findIndex(v=>v[0].startsWith("finish:"));
- const floorFinishIndex=list.findIndex(v=>v[0].startsWith("floorfinish:"));
- const groups=ui.mode==="floor"?[["STRUKTUR",0,3],["RÄUME",3,11],["AUSSTATTUNG",11,finishIndex],["WÄNDE STREICHEN",finishIndex,floorFinishIndex],["BODENBELÄGE",floorFinishIndex,list.length]]:[["WERKZEUG",0,1],["GEBÄUDE",1,6],["AUSSEN",6,list.length]];
- for(const group of groups){
-   markup+='<span class="tool-category">'+group[0]+'</span>';
-   markup+=list.slice(group[1],group[2]).map(v=>{
-     const wall=v[0].startsWith("finish:")?S.WALL_FINISHES[v[0].slice(7)]:null;
-     const floor=v[0].startsWith("floorfinish:")?S.FLOOR_FINISHES[v[0].slice(12)]:null;
-     const mat=wall||floor;
-     const display=mat?'<span class="finish-swatch" style="background:'+mat.color+'"></span>':'<span class="toolicon">'+v[1]+'</span>';
-     return '<button title="'+esc(v[2]+(mat?" · "+euros(mat.cost)+" / "+(wall?"Wandsegment":"m²"):""))+'" class="toolbtn'+(ui.tool===v[0]?" active":"")+'" data-tool="'+v[0]+'">'+display+'<small>'+v[2]+'</small></button>';
-   }).join("");
+ const inFloor=ui.mode==="floor";
+ const list=inFloor?[["wall","┃","Wände"],["door","◫","Standardtür"],["erase","⌫","Rückbau"],["catalog","▦","Baukatalog"],["zone-overlay","◈","Zonenfilter"]]:worldTools;
+ let markup='<button class="toolbtn" data-action="'+(inFloor?"world-view":"open-buildings")+'"><span class="toolicon">←</span><small>'+(inFloor?"Außen":"Objekte")+'</small></button><div class="tooldiv"></div>';
+ markup+=list.map(v=>'<button class="toolbtn'+(ui.tool===v[0]?" active":"")+(v[0]==="zone-overlay"&&ui.zoneFilter?" active":"")+'" data-tool="'+v[0]+'"><span class="toolicon">'+v[1]+'</span><small>'+v[2]+'</small></button>').join("");
+ if(inFloor){
+   markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="open-catalog"><span class="toolicon">⊞</span><small>Alle Objekte</small></button>';
+   markup+='<button class="toolbtn" data-action="floor-view-toggle"><span class="toolicon">◈</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
+ }else{
+   markup+='<button class="toolbtn" data-action="cancel-sketch" '+(!ui.sketch?"disabled":"")+'><span class="toolicon">⊗</span><small>Skizze löschen</small></button>';
  }
- if(ui.mode==="world")markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="rotate-build" title="Gebäude drehen (R)"><span class="toolicon">⟳</span><small>Drehen</small></button>';
- else markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="floor-view-toggle" title="Innenansicht zwischen 2,5D und Bauplan umschalten"><span class="toolicon">'+(ui.floorView==="iso"?"▧":"◈")+'</span><small>'+(ui.floorView==="iso"?"Bauplan":"2,5D")+'</small></button>';
- markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" title="Rückgängig (Strg+Z)" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" title="Wiederherstellen (Strg+Y)" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
+ markup+='<div class="tooldiv"></div><button class="toolbtn" data-action="undo" '+(!undoStack.length?"disabled":"")+'><span class="toolicon">↶</span><small>Zurück</small></button><button class="toolbtn" data-action="redo" '+(!redoStack.length?"disabled":"")+'><span class="toolicon">↷</span><small>Vorwärts</small></button>';
  $("toolbar").innerHTML=markup;
 }
 function updateToolStats(){
@@ -305,12 +320,12 @@ function focusParcel(id){
 }
 function updatePanel(){
  const panel=$("panel");if(panel.classList.contains("hidden"))return;
- const sections={property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
+ const sections={catalog:["Baukatalog · Planen & Ausstatten",catalogPanel],property:["Immobilienobjekt",propertyPanel],land:["Grundstücke und Ankauf",landPanel],projects:["Bauaufträge und Eigenbetrieb",projectsPanel],buildings:["Immobilienbestand",buildingsPanel],leasing:["Vermietung",leasingPanel],companies:["Unternehmen",companiesPanel],operations:["Facility Management",operationsPanel],transport:["Verkehr & ÖPNV",transportPanel],finance:["Finanzübersicht",financePanel],messages:["Meldungen",messagesPanel],help:["Spielanleitung",helpPanel]};
  const section=sections[ui.nav]||sections.buildings;$("panelTitle").textContent=section[0];$("panelBody").innerHTML=section[1]();
 }
 function refresh(){redrawHUD();updateToolbar();updateMapInfo();updateToolStats();updatePanel();}
 function resizeSoon(){setTimeout(()=>renderer.resize(),30);}
-function toolAction(tool){ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
+function toolAction(tool){if(tool==="catalog"){panelOpen("catalog");return;}if(tool==="zone-overlay"){ui.zoneFilter=!ui.zoneFilter;refresh();return;}if(S.TYPES[tool]&&ui.sketch&&ui.sketch.tool!==tool)ui.sketch=null;ui.tool=tool;ui.wallStart=null;ui.dragBuild=null;updateToolbar();updateMapInfo();updateToolStats();}
 async function saveGame(silent){
  try{const data=JSON.stringify(state);if(window.IPBridge)await window.IPBridge.save(data);else localStorage.setItem("industrial-park-save-v2",data);if(!silent)notify("Spielstand lokal gespeichert.");}
  catch(e){if(!silent)notify("Speichern fehlgeschlagen: "+e.message,true);}
@@ -399,6 +414,15 @@ function act(name,element){
  let res;
  switch(name){
  case "floor-view":setViewFloor(ui.selectedId);break;
+ case "open-catalog":panelOpen("catalog");break;
+ case "catalog-filter":ui.catalogCategory=id;updatePanel();break;
+ case "catalog-select":ui.tool=element.dataset.tool;ui.assetVariant=element.dataset.variant||null;closePanel();refresh();notify("Ausgewählt: "+(S.ASSET_INDEX[ui.tool.slice(6)]?.name||ui.tool)+". Auf der Etage platzieren.");break;
+ case "cancel-sketch":ui.sketch=null;ui.dragBuild=null;refresh();notify("Bauentwurf verworfen.");break;
+ case "review-footprint":{
+   if(!ui.sketch||ui.sketch.cells.length<2){notify("Ziehe zunächst mindestens zwei Baufelder auf.",true);break;}
+   openConstructionOffer({tool:ui.sketch.tool,cells:ui.sketch.cells});break;
+ }
+ case "zones-toggle":ui.zoneFilter=!ui.zoneFilter;refresh();break;
  case "property-details":panelOpen("property");break;
  case "open-buildings":panelOpen("buildings");break;
  case "open-land":panelOpen("land");break;
@@ -415,7 +439,7 @@ function act(name,element){
    checkpoint();res=S.commission(state,ui.pendingPlan,element.dataset.contractor);
    if(!res.ok)undoStack.pop();
    choice(res.ok,res.message||(res.ok?res.project.contractorName+" beauftragt · "+res.project.totalDays+" Tage Bauzeit":"Vergabe nicht möglich"));
-   if(res.ok){ui.selectedId=res.building?res.building.id:null;closeConstructionOffer();}
+   if(res.ok){ui.selectedId=res.building?res.building.id:null;ui.sketch=null;closeConstructionOffer();}
    refresh();break;
  }
  case "rotate-build":ui.rotation=(ui.rotation+1)%2;refresh();notify("Gebäudeausrichtung: "+(ui.rotation?"90°":"0°"));break;
@@ -459,6 +483,12 @@ document.addEventListener("click",e=>{
  const tool=e.target.closest("[data-tool]");if(tool){toolAction(tool.dataset.tool);return;}
  const button=e.target.closest("[data-action]");if(button){act(button.dataset.action,button);$("contextMenu").classList.add("hidden");return;}
  if(!e.target.closest("#contextMenu"))$("contextMenu").classList.add("hidden");
+});
+document.addEventListener("input",e=>{
+ if(e.target&&e.target.id==="catalogSearch"){
+   ui.catalogSearch=e.target.value;updatePanel();
+   const input=$("catalogSearch");if(input&&input.focus){input.focus();if(input.setSelectionRange)input.setSelectionRange(ui.catalogSearch.length,ui.catalogSearch.length);}
+ }
 });
 $("saveBtn").addEventListener("click",()=>saveGame());
 $("closePanel").addEventListener("click",closePanel);
