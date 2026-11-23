@@ -4,7 +4,10 @@ const S=window.IPSim, canvas=document.getElementById("gameCanvas"),stage=documen
 const $=(id)=>document.getElementById(id), euros=(n)=>Math.round(Number(n)||0).toLocaleString("de-DE")+" €";
 const esc=(s)=>String(s===undefined?"":s).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 let state=S.create(),toastTimeout=0,lastFrame=0,lastAutosave=0,pressed=false,drag=null,spaceDown=false,menuTarget=null;
-const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",cam:{cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
+const undoStack=[],redoStack=[];
+function checkpoint(){undoStack.push(JSON.stringify(state));if(undoStack.length>28)undoStack.shift();redoStack.length=0;}
+function restoreHistory(direction){const from=direction==="undo"?undoStack:redoStack,to=direction==="undo"?redoStack:undoStack;if(!from.length){notify("Keine Bearbeitungsschritte vorhanden.",true);return;}to.push(JSON.stringify(state));state=S.validateLoaded(JSON.parse(from.pop()));ui.selectedId=building(ui.selectedId)?.id||null;ui.dragBuild=null;ui.wallStart=null;refresh();notify(direction==="undo"?"Bauschritt zurückgenommen.":"Bauschritt wiederhergestellt.");}
+const ui={mode:"world",nav:"world",selectedId:null,floorIndex:0,tool:"select",rotation:0,dragBuild:null,cam:{cx:23,cy:20,zoom:.86,panX:0,panY:0,floorZoom:1,floorX:0,floorY:0},hover:null,hoverFloor:null,wallStart:null,overlay:"normal",speed:1};
 function dateFormat(v,opts){return new Intl.DateTimeFormat("de-DE",Object.assign({timeZone:"UTC"},opts)).format(new Date(v));}
 function clock(){return dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"})+" · "+dateFormat(state.clock,{hour:"2-digit",minute:"2-digit",hour12:false});}
 function notify(message,error){const box=$("toast");box.textContent=message;box.className="toast show"+(error?" error":"");clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>box.className="toast",3500);}
@@ -26,9 +29,9 @@ function panelOpen(section){
  updatePanel();resizeSoon();
 }
 function closePanel(){$("panel").classList.add("hidden");ui.nav="world";document.querySelectorAll(".navbtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.nav==="world"));resizeSoon();}
-function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.tool="wall";ui.wallStart=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;panelOpen("property");refresh();}
-function setViewWorld(){ui.mode="world";ui.tool="select";ui.wallStart=null;ui.hoverFloor=null;refresh();}
-function selectBuilding(b){ui.selectedId=b?b.id:null;if(b)panelOpen("property");else if(ui.nav==="property")closePanel();refresh();}
+function setViewFloor(id){const b=building(id);if(!b){notify("Gebäude fehlt.",true);return;}ui.mode="floor";ui.selectedId=id;ui.floorIndex=0;ui.tool="wall";ui.wallStart=null;ui.dragBuild=null;ui.cam.floorZoom=1;ui.cam.floorX=0;ui.cam.floorY=0;closePanel();refresh();}
+function setViewWorld(){ui.mode="world";ui.tool="select";ui.wallStart=null;ui.hoverFloor=null;ui.dragBuild=null;refresh();}
+function selectBuilding(b){ui.selectedId=b?b.id:null;refresh();}
 function redrawHUD(){
  const m=S.metrics(state),d=$("date"),t=$("time");
  d.textContent=dateFormat(state.clock,{day:"2-digit",month:"2-digit",year:"numeric"});
@@ -40,7 +43,7 @@ function redrawHUD(){
  $("viewHint").textContent=ui.mode==="floor"?(building(ui.selectedId)?.floors[ui.floorIndex]?.label||"Innenraum"):"Isometrische Übersicht";
  $("layerName").textContent=({normal:"Normalansicht",traffic:"Verkehr & Parken",vacancy:"Immobilien",utilities:"Versorgung"})[ui.overlay];
  $("layersBtn").disabled=ui.mode==="floor";
- $("mapHint").textContent=ui.mode==="floor"?"Wand: Start- und Endpunkt anklicken · Tür: Wand anklicken · Raum: Zelle anklicken · Esc: Außenansicht":"Linksklick: auswählen / bauen · Mausrad: zoomen · Leertaste + Ziehen: verschieben · Rechtsklick: Optionen";
+ $("mapHint").textContent=ui.mode==="floor"?"Wände: Anfang / Ende · Räume: Ziehen · Türen: Wand anklicken · Strg+Z rückgängig · Esc: Außenansicht":"Bauen: klicken oder ziehen · R Gebäude drehen · Strg+Z rückgängig · Leertaste + Ziehen: Karte verschieben";
 }
 const worldTools=[
  ["select","↖","Auswählen"],["office","▥","Büro"],["warehouse","▰","Halle"],["workshop","▤","Werkstatt"],["cafe","☕","Gastro"],
@@ -249,13 +252,18 @@ function act(name,element){
  let res;
  switch(name){
  case "floor-view":setViewFloor(ui.selectedId);break;
+ case "property-details":panelOpen("property");break;
+ case "open-buildings":panelOpen("buildings");break;
+ case "rotate-build":ui.rotation=(ui.rotation+1)%2;refresh();notify("Gebäudeausrichtung: "+(ui.rotation?"90°":"0°"));break;
+ case "undo":restoreHistory("undo");break;
+ case "redo":restoreHistory("redo");break;
  case "world-view":setViewWorld();break;
- case "focus-building":if(building(ui.selectedId)){setViewWorld();focusBuilding(building(ui.selectedId));}break;
+ case "focus-building":if(building(ui.selectedId)){setViewWorld();focusBuilding(building(ui.selectedId));closePanel();refresh();}break;
  case "select-floor":ui.floorIndex=Number(element.dataset.level);ui.mode="floor";ui.tool="wall";ui.wallStart=null;refresh();break;
  case "add-floor":res=S.addFloor(state,ui.selectedId);choice(res.ok,res.message||"Etage ergänzt.");refresh();break;
  case "go-leasing":panelOpen("leasing");break;
  case "inspect-building":ui.selectedId=id;panelOpen("property");break;
- case "map-building":setViewWorld();focusBuilding(building(id));panelOpen("property");break;
+ case "map-building":setViewWorld();focusBuilding(building(id));closePanel();refresh();break;
  case "lease":{
   const i=Number(element.dataset.index),a=state.applicants[i],sel=$("leaseBuilding"+i),r=$("leaseRent"+i);
   if(!a||!sel||!r)return;
