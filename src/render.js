@@ -367,7 +367,22 @@ function factory(canvas){
   }else if(lightHour>=18){c.fillStyle="rgba(205,157,108,.07)";c.fillRect(0,0,cw,ch);}
   if(u.tool!=="select"){
     const footprints=u.dragBuild&&u.dragBuild.length?u.dragBuild:u.hover?[u.hover]:[];
-    if(S.TYPES[u.tool]&&u.hover){
+    if(S.TYPES[u.tool]&&u.sketch){
+      const set=new Set(u.sketch.cells.map(p=>p.x+","+p.y)),working=u.dragBuild||[];
+      const all=u.sketch.cells.concat(working.filter(p=>!set.has(p.x+","+p.y)));
+      const preview=S.previewFootprint(s,u.tool,all);
+      for(const p of u.sketch.cells)diamond(p.x,p.y,u,"rgba(47,159,142,.41)","#328f7e");
+      for(const p of working)diamond(p.x,p.y,u,"rgba(119,213,213,.36)","#7bd3ca");
+      if(all.length){
+        const last=all[all.length-1],pos=worldP(last.x+.5,last.y+.5,15,u);
+        const label=all.length*16+" m² · "+(preview.ok?"Skizze bereit":preview.message);
+        c.font="600 10px Segoe UI,Arial";const w=Math.min(340,c.measureText(label).width+20);
+        c.fillStyle=preview.ok?"rgba(25,94,88,.94)":"rgba(151,69,54,.94)";
+        c.beginPath();c.roundRect(pos.x-w/2,pos.y-17,w,26,7);c.fill();drawText(label,pos.x,pos.y-4,10,"#f4ffff",true);
+      }
+    }else if(S.TYPES[u.tool]&&u.dragBuild&&u.dragBuild.length){
+      for(const p of u.dragBuild)diamond(p.x,p.y,u,"rgba(75,189,172,.4)","#4caeaa");
+    }else if(S.TYPES[u.tool]&&u.hover){
       const p=S.preview(s,u.tool,u.hover.x,u.hover.y,u.rotation||0);
       const ok=p.ok,color=ok?"#54a99a":"#d67665",soft=ok?"rgba(63,180,149,.33)":"rgba(205,88,75,.32)";
       const poly=[worldP(p.x,p.y,0,u),worldP(p.x+p.w,p.y,0,u),worldP(p.x+p.w,p.y+p.h,0,u),worldP(p.x,p.y+p.h,0,u)];
@@ -590,6 +605,12 @@ function factory(canvas){
        line(c,mid,mix(p,q,.86),"#9e805f",1.1);
      }
    }
+   if(u.zoneFilter&&f.zones)for(const k of Object.keys(f.zones)){
+     const [x,y]=k.split(",").map(Number),ztype=S.ZONE_TYPES[f.zones[k]];
+     if(!ztype||!S.validCell(f,x,y))continue;
+     c.fillStyle=ztype.color+"99";c.fillRect(g.x+x*g.size,g.y+y*g.size,g.size,g.size);
+     if((x+y)%4===0&&g.size>18)drawText(ztype.name,g.x+(x+.5)*g.size,g.y+(y+.5)*g.size,10,"#39505c",true);
+   }
    const h=u.hoverFloor;
    if(h&&h.inside){
      c.fillStyle="rgba(56,143,175,.2)";c.fillRect(g.x+h.x*z,g.y+h.y*z,z,z);
@@ -771,7 +792,15 @@ function factory(canvas){
      const h=20+b.floors.length*30;
      const a=worldP(b.x,b.y,0,u),e=worldP(b.x+b.w,b.y,0,u),d=worldP(b.x+b.w,b.y+b.h,0,u),f=worldP(b.x,b.y+b.h,0,u);
      const at=worldP(b.x,b.y,h,u),et=worldP(b.x+b.w,b.y,h,u),dt=worldP(b.x+b.w,b.y+b.h,h,u),ft=worldP(b.x,b.y+b.h,h,u);
-     if(insidePoly(p,[at,et,dt,ft])||insidePoly(p,[ft,dt,d,f])||insidePoly(p,[dt,et,e,d]))return b;
+     if(b.shape&&b.shape.length){
+       const height=20+b.floors.length*30;
+       for(const [dx,dy] of b.shape){
+         const x=b.x+dx,y=b.y+dy;
+         const a=worldP(x,y,0,u),c1=worldP(x+1,y,0,u),d1=worldP(x+1,y+1,0,u),e1=worldP(x,y+1,0,u);
+         const A=worldP(x,y,height,u),C=worldP(x+1,y,height,u),D=worldP(x+1,y+1,height,u),E=worldP(x,y+1,height,u);
+         if(insidePoly(p,[A,C,D,E])||insidePoly(p,[E,D,d1,e1])||insidePoly(p,[C,D,d1,c1]))return b;
+       }
+     }else if(insidePoly(p,[at,et,dt,ft])||insidePoly(p,[ft,dt,d,f])||insidePoly(p,[dt,et,e,d]))return b;
    }
    return null;
  }
